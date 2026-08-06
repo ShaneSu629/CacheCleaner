@@ -1,8 +1,8 @@
 ﻿<#
 ╔══════════════════════════════════════════════════════════════════╗
-║            智能缓存清理工具  Smart Cache Cleaner                ║
-║  自动扫描当前用户目录下的 AI 缓存、软件缓存、临时文件           ║
-║  智能识别 → 风险分级 → 交互选择 → 安全清理                     ║
+║            智能缓存清理工具  Smart Cache Cleaner                    ║
+║  自动扫描当前用户目录下的 AI 缓存、软件缓存、临时文件                    ║
+║  智能识别 → 风险分级 → 交互选择 → 安全清理                            ║
 ╚══════════════════════════════════════════════════════════════════╝
 #>
 
@@ -193,17 +193,17 @@ function Write-Color {
 # 写标题
 function Write-Header {
     param([string]$Title)
-    $width = 70
-    $pad = [math]::Max(0, [math]::Floor(($width - $Title.Length - 2) / 2))
+    $width = Get-ConsoleWidth
     Write-Color ("=" * $width) -Color "Cyan"
-    Write-Color (" " * $pad + " $Title " + " " * ($width - $pad - $Title.Length - 2)) -Color "Yellow"
+    Write-Color (Center-Text -Text " $Title " -Width $width) -Color "Yellow"
     Write-Color ("=" * $width) -Color "Cyan"
 }
 
 # 写分隔线
 function Write-Separator {
     param([string]$Char = "-")
-    Write-Color ("$Char" * 70) -Color "DarkGray"
+    $width = Get-ConsoleWidth
+    Write-Color (Repeat-Char -Char $Char -Count $width) -Color "DarkGray"
 }
 
 # 暂停等待按键
@@ -212,6 +212,45 @@ function Wait-KeyPress {
     Write-Host "按任意键继续..." -ForegroundColor DarkGray -NoNewline
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     Write-Host ""
+}
+
+# 获取文本实际显示宽度（中文字符占2列）
+function Get-DisplayWidth {
+    param([string]$Text)
+    $width = 0
+    foreach ($char in $Text.ToCharArray()) {
+        if ([int]$char -gt 127) { $width += 2 } else { $width += 1 }
+    }
+    return $width
+}
+
+# 获取控制台宽度（自适应），最小宽度 60，最大宽度 120
+function Get-ConsoleWidth {
+    $minWidth = 60
+    $maxWidth = 120
+    try {
+        $w = $Host.UI.RawUI.WindowSize.Width
+        if ($w -lt $minWidth) { return $minWidth }
+        if ($w -gt $maxWidth) { return $maxWidth }
+        return $w
+    } catch { return $minWidth }
+}
+
+# 居中文本（带左右填充，支持中文字符）
+function Center-Text {
+    param([string]$Text, [int]$Width)
+    $displayWidth = Get-DisplayWidth -Text $Text
+    $pad = [math]::Max(0, [math]::Floor(($Width - $displayWidth) / 2))
+    $rightPad = $Width - $pad - $displayWidth
+    if ($rightPad -lt 0) { $rightPad = 0 }
+    return (" " * $pad) + $Text + (" " * $rightPad)
+}
+
+# 重复字符，支持中文字符
+function Repeat-Char {
+    param([string]$Char, [int]$Count)
+    if ($Count -le 0) { return "" }
+    return "$Char" * $Count
 }
 
 # ============================================================
@@ -792,11 +831,15 @@ function Show-MainMenu {
     do {
         Clear-Host
         
-        # ===== 横幅 =====
-        Write-Color ("╔" + "═" * 58 + "╗") -Color "Cyan"
-        Write-Color "║              智能缓存清理工具 v2.0              ║" -Color "Yellow"
-        Write-Color "║        Smart Cache Cleaner for Windows          ║" -Color "Cyan"
-        Write-Color ("╚" + "═" * 58 + "╝") -Color "Cyan"
+        # ===== 横幅（自适应宽度） =====
+        $bw = Get-ConsoleWidth
+        $bwInner = $bw - 2  # 去掉左右边框占位
+        $bannerLine1 = "智能缓存清理工具 v2.0"
+        $bannerLine2 = "Smart Cache Cleaner for Windows"
+        Write-Color ("╔" + "═" * $bwInner + "╗") -Color "Cyan"
+        Write-Color ("║" + (Center-Text -Text $bannerLine1 -Width $bwInner) + "║") -Color "Yellow"
+        Write-Color ("║" + (Center-Text -Text $bannerLine2 -Width $bwInner) + "║") -Color "Cyan"
+        Write-Color ("╚" + "═" * $bwInner + "╝") -Color "Cyan"
         Write-Host ""
         
         # ===== 系统信息 =====
@@ -809,10 +852,12 @@ function Show-MainMenu {
         Write-Color "  目标目录: $($Config.UserHome)" -Color "DarkGray"
         Write-Host ""
         
-        # ===== 功能菜单 =====
-        Write-Color "  ╔══════════════════════════════════════════════╗" -Color "Magenta"
-        Write-Color "  ║      主要功能 (AI缓存优先)                  ║" -Color "Magenta"
-        Write-Color "  ╚══════════════════════════════════════════════╝" -Color "Magenta"
+        # ===== 功能菜单（自适应宽度） =====
+        $menuWidth = $bw - 4  # 菜单框宽度（保留缩进）
+        $menuInner = $menuWidth - 2
+        Write-Color ("  ╔" + "═" * $menuInner + "╗") -Color "Magenta"
+        Write-Color ("  ║" + (Center-Text -Text "主要功能 (AI缓存优先)" -Width $menuInner) + "║") -Color "Magenta"
+        Write-Color ("  ╚" + "═" * $menuInner + "╝") -Color "Magenta"
         Write-Host ""
         Write-Color "    ┌───── AI 缓存清理（重点） ─────" -Color "White"
         Write-Color "    │ 1. 🔥 深度扫描 AI 缓存（推荐）" -Color "Magenta" -BackColor "Black"
@@ -1187,6 +1232,66 @@ function Show-CleanHistory {
 # ============================================================
 # 程序入口
 # ============================================================
+
+# 设置初始控制台窗口尺寸（CMD + PowerShell 同步配置）
+$initialWindowWidth = 96
+$initialWindowHeight = 28
+$initialBufferHeight = 9999
+
+# 方式一：通过 mode.com 设置 CMD 控制台窗口（兼容 cmd 启动场景）
+try {
+    & mode.com con: cols=$initialWindowWidth lines=$initialWindowHeight 2>$null
+} catch { }
+
+# 方式二：通过 PowerShell RawUI 设置窗口（兼容 PowerShell 直接启动场景）
+try {
+    $rawUI = $Host.UI.RawUI
+    if ($rawUI) {
+        $bufferSize = $rawUI.BufferSize
+        if ($bufferSize.Width -lt $initialWindowWidth) {
+            $rawUI.SetBufferSize($initialWindowWidth, [math]::Max($bufferSize.Height, $initialBufferHeight))
+        }
+        $rawUI.WindowSize = New-Object System.Management.Automation.Host.Size(
+            [math]::Min($initialWindowWidth, $rawUI.BufferSize.Width),
+            [math]::Min($initialWindowHeight, $rawUI.BufferSize.Height)
+        )
+        # 尝试设置窗口位置居中
+        try {
+            $rawUI.WindowPosition = New-Object System.Management.Automation.Host.Coordinates(
+                [math]::Max(0, [int](($rawUI.BufferSize.Width - $rawUI.WindowSize.Width) / 2)),
+                0
+            )
+        } catch { }
+    }
+} catch { }
+
+# 方式三：通过 Win32 API 调整父窗口大小（最精确，覆盖 cmd/powershell/terminal）
+try {
+    Add-Type @"
+    using System;
+    using System.Runtime.InteropServices;
+    public class ConsoleWin {
+        [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+        [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr hWnd, int x, int y, int w, int h, bool repaint);
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RECT { public int L,T,R,B; }
+    }
+"@ -ErrorAction SilentlyContinue
+
+    $hwnd = [ConsoleWin]::GetConsoleWindow()
+    if ($hwnd -ne [IntPtr]::Zero) {
+        $rect = New-Object ConsoleWin+RECT
+        [ConsoleWin]::GetWindowRect($hwnd, [ref]$rect) | Out-Null
+        $charW = 8
+        $charH = 16
+        $extraW = 16
+        $extraH = 52
+        $targetW = $initialWindowWidth * $charW + $extraW
+        $targetH = $initialWindowHeight * $charH + $extraH
+        [ConsoleWin]::MoveWindow($hwnd, $rect.L, $rect.T, $targetW, $targetH, $true) | Out-Null
+    }
+} catch { }
 
 # 检查管理员权限（非必须，但清理某些系统缓存需要）
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
