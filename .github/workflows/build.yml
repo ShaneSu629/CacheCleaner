@@ -30,7 +30,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.25'
 
       - name: Verify module setup
         run: |
@@ -71,3 +71,39 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: cachecleaner-*
+
+  # ── Windows GUI (Wails) ──
+  build-gui:
+    name: build GUI (Windows/amd64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build GUI
+        run: wails build -skipbindings
+
+      - name: Rename output
+        shell: pwsh
+        run: |
+          Rename-Item -Path build\bin\CacheCleaner.exe -NewName CacheCleaner-GUI-windows-amd64.exe
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CacheCleaner-GUI-windows-amd64
+          path: build/bin/CacheCleaner-GUI-windows-amd64.exe
+          if-no-files-found: error
+
+      - name: Publish release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/bin/CacheCleaner-GUI-windows-amd64.exe
