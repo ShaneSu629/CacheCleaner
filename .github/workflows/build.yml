@@ -9,6 +9,9 @@ on:
 permissions:
   contents: write
 
+env:
+  GO111MODULE: on
+
 jobs:
   build:
     name: build ${{ matrix.goos }}/${{ matrix.goarch }}
@@ -28,6 +31,14 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+
+      - name: Verify module setup
+        run: |
+          echo "GO111MODULE=$(go env GO111MODULE)"
+          echo "GOMOD=$(go env GOMOD)"
+          ls -la
+          test -f go.mod && echo "go.mod OK" || (echo "go.mod MISSING" && exit 1)
+          head -5 go.mod
 
       - name: Build (static, no CGO)
         env:
