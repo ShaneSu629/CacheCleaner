@@ -5,7 +5,8 @@ cachecleaner-*
 cc_verify.exe
 
 # 用户配置与清理历史（含本机路径，勿提交）
-config/
+# 注意：必须加前导 /，否则 internal/config/ 这种代码包目录也会被误忽略
+/config/
 CacheCleaner/config.json
 CacheCleaner/history.json
 
