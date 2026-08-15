@@ -15,15 +15,14 @@ env:
 jobs:
   build:
     name: build ${{ matrix.goos }}/${{ matrix.goarch }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { goos: windows, goarch: amd64, ext: '.exe' }
-          - { goos: linux,   goarch: amd64, ext: '' }
-          - { goos: darwin,  goarch: amd64, ext: '' }
-          - { goos: darwin,  goarch: arm64, ext: '' }
+          - { goos: windows, goarch: amd64, ext: '.exe', runner: ubuntu-latest }
+          - { goos: linux,   goarch: amd64, ext: '',     runner: ubuntu-latest }
+          - { goos: darwin,  goarch: amd64, ext: '',     runner: ubuntu-latest }
     steps:
       - uses: actions/checkout@v4
 
@@ -71,6 +70,51 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: cachecleaner-*
+
+  # ── macOS arm64 (native, GitHub-hosted M1 runner) ──
+  build-darwin-arm64:
+    name: build darwin/arm64 (native)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Verify module setup
+        run: |
+          echo "GO111MODULE=$(go env GO111MODULE)"
+          echo "GOMOD=$(go env GOMOD)"
+          ls -la
+          test -f go.mod && echo "go.mod OK" || (echo "go.mod MISSING" && exit 1)
+          head -5 go.mod
+
+      - name: Build (static, no CGO)
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          export GO111MODULE=on
+          go version
+          go env GO111MODULE GOMOD GOPATH GOROOT
+          go mod download
+          OUT="cachecleaner-darwin-arm64"
+          go build -trimpath -ldflags="-s -w" -o "$OUT" ./cmd/cli
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cachecleaner-darwin-arm64
+          path: cachecleaner-darwin-arm64
+          if-no-files-found: error
+
+      - name: Publish release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cachecleaner-darwin-arm64
 
   # ── Windows GUI (Wails) ──
   build-gui:
