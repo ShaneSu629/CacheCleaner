@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 env:
-  GO111MODULE: on
+  GO111MODULE: 'on'
 
 jobs:
   build:
@@ -45,6 +45,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: '0'
+          GO111MODULE: 'on'
         run: |
           OUT="cachecleaner-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
           go build -trimpath -ldflags="-s -w" -o "$OUT" .
