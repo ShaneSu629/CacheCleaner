@@ -1,0 +1,22 @@
+{
+  "name": "CacheCleaner",
+  "outputfilename": "CacheCleaner",
+  "frontend:dir": "frontend",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev": "",
+  "assetdir": "frontend/dist",
+  "author": {
+    "name": "Katsuya"
+  },
+  "info": {
+    "companyName": "CacheCleaner",
+    "productName": "智能缓存清理工具",
+    "productVersion": "1.0.5",
+    "copyright": "© 2026"
+  },
+  "windows": {
+    "manifest": "build/windows/CacheCleaner.manifest",
+    "icon": "build/windows/icon.ico"
+  }
+}

@@ -5,7 +5,11 @@
 Electron/Chromium 标准缓存目录结构，因此**任何新出的 Electron 套壳 AI 工具装了即被自动识别**，
 无需手工维护清单。
 
-> 本仓库现以 **Go 版本** 为核心实现（纯标准库、`CGO_ENABLED=0` 静态编译）。
+> 本仓库提供两种构建：
+> - **命令行版（CLI）**：纯标准库、`CGO_ENABLED=0` 静态编译，源码位于 `cmd/cli/`，无外部依赖。
+> - **图形界面版（GUI，Wails）**：基于 `github.com/wailsapp/wails/v2`，源码位于 `main.go` / `app.go` + `frontend/`，
+>   需要 CGO 与系统 WebView 运行时，详见下方「GUI 图形界面（Wails）」一节。
+>
 > 旧版 Windows 专用 PowerShell 脚本 `CacheCleaner.ps1` / `CacheCleaner.bat` 仍保留作参考，
 > 但已不再维护。
 
@@ -23,6 +27,7 @@ Electron/Chromium 标准缓存目录结构，因此**任何新出的 Electron �
 - **风险三级分级**：`Safe` 安全（绿）/ `Caution` 谨慎（黄）/ `Review` 复核（红）。
 - **交互选择清理**：按编号选择，`safe` 仅清安全项，`all` 全部，`q` 取消；清理前二次确认。
 - **自定义目录管理 / 排除目录 / 清理历史**。
+- **GUI 实时进度条**：Wails 图形界面扫描时按阶段（已知缓存 → 自动发现 → 通用识别）实时回传进度与百分比，并在「关于」弹窗中说明版本与引擎。
 
 ---
 
@@ -71,10 +76,43 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o cachecleaner.exe     .
 
 推送 `v*` 标签即可触发工作流 `.github/workflows/build.yml`，自动为四个目标平台
 交叉编译并发布到 Release（静态、无 CGO）。也可在 Actions 页面手动 `Run workflow`。
+> 注：CI 当前仅编译静态 CLI（`cmd/cli`），GUI 需在本机使用 `wails build` 出包。
 
 ---
 
-## 菜单功能
+## GUI 图形界面（Wails）
+
+除命令行版外，仓库还内置一套 **Wails** 实现的扁平化图形界面（`main.go` + `app.go` 绑定层 +
+`frontend/dist` 静态前端）。它**复用同一套扫描/清理引擎，仅替换 UI 层**，不引入任何业务逻辑改动。
+
+### 前置依赖（每个平台不同）
+
+- **Go 1.22+**（需开启 `CGO`）
+- **Wails CLI**：`go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+- **系统 WebView 运行时**：
+  - Windows：WebView2（Win10/11 通常已自带）
+  - macOS：系统 WKWebView（无需额外安装）
+  - Linux：`sudo apt install gcc libgtk-3-dev libwebkit2gtk-4.0-dev`
+    （Ubuntu 24.04+ 用 `libwebkit2gtk-4.1-dev`，并在 `wails build` 加 `-tags webkit2_41`）
+- 前端为**纯静态 HTML/CSS/JS**，无需 Node 构建链。
+
+### 构建与运行
+
+```bash
+# 首次拉取依赖（需联网）
+go get github.com/wailsapp/wails/v2@latest
+go mod tidy
+
+# 开发模式（热重载，需系统 WebView）
+wails dev
+
+# 编译发布（开启 CGO，输出原生二进制 / .app）
+wails build
+```
+
+---
+
+## 菜单功能（命令行版）
 
 ```
 ══════════════════════════════════════
@@ -95,16 +133,20 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o cachecleaner.exe     .
 
 ```
 CacheCleaner/
-├── go.mod                      # Go 模块（纯标准库，无外部依赖）
-├── main.go                     # 入口与菜单循环
+├── go.mod                      # Go 模块（CLI 无外部依赖；GUI 依赖 Wails）
+├── main.go                     # GUI 入口（Wails 应用）
+├── app.go                      # GUI 绑定层（App 结构 + Scan/Clean/配置方法），复用内部包
+├── cmd/cli/main.go             # 命令行版入口（纯标准库、静态编译，无外部依赖）
+├── frontend/dist/              # GUI 静态前端（HTML/CSS/JS，扁平化）
 ├── internal/
 │   ├── model/                  # 数据结构与风险等级
 │   ├── config/                 # OS 自适应路径与用户配置
 │   ├── db/                     # 三系统已知缓存库 + Electron 缓存签名
 │   ├── scan/                   # 扫描引擎（已知/自动发现/通用识别/合并）
-│   ├── ui/                     # 终端菜单与配色展示
+│   ├── ui/                     # 命令行菜单与配色展示
 │   └── clean/                  # 清理引擎与历史记录
-├── .github/workflows/build.yml # 跨平台编译 CI
+├── wails.json                  # Wails 工程配置
+├── .github/workflows/build.yml # 跨平台编译 CI（当前仅编译 CLI）
 ├── 技术文档.md                  # 架构与修改记录
 └── CacheCleaner.ps1 / .bat     # 旧版 Windows 专用实现（已弃用）
 ```

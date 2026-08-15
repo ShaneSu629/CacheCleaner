@@ -3,6 +3,10 @@ cachecleaner
 cachecleaner.exe
 cachecleaner-*
 cc_verify.exe
+cli.exe
+
+# build 输出目录
+build/bin/
 
 # 用户配置与清理历史（含本机路径，勿提交）
 # 注意：必须加前导 /，否则 internal/config/ 这种代码包目录也会被误忽略
@@ -12,9 +16,12 @@ CacheCleaner/history.json
 
 # 临时文件
 *.tmp
+*.zip
 
-# 本地推送辅助脚本（个人工具，勿提交到仓库）
+# 本地辅助脚本 / 临时文档（个人工具，勿提交到仓库）
 git_push.py
+install_wails.ps1
+FyneUI-Plan.md
 
 # 项目私有数据 / 记忆目录（含本机路径与记忆，勿提交）
 .workbuddy/

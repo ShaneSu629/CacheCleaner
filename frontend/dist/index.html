@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>智能缓存清理工具</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">🧹</span>
+        <div>
+          <h1>智能缓存清理工具</h1>
+          <p class="sub">跨平台 · 安全分级 · 一键释放空间</p>
+        </div>
+      </div>
+      <div class="scan-actions">
+        <button id="btn-about" class="btn btn-ghost btn-icon" title="关于">ℹ</button>
+        <button id="btn-ai" class="btn btn-primary">深度扫描 AI 缓存</button>
+        <button id="btn-all" class="btn btn-ghost">一键扫描全部</button>
+      </div>
+    </header>
+
+    <div id="status" class="status hidden">
+      <div class="progress">
+        <div class="progress-head">
+          <span id="status-text">扫描中…</span>
+          <span id="status-pct" class="pct"></span>
+        </div>
+        <div class="progress-track">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <section id="results" class="results hidden">
+      <div class="results-head">
+        <div class="stats" id="stats">共 0 项 · 可释放 0 B</div>
+        <div class="result-actions">
+          <button id="btn-select-all" class="btn btn-sm">全选</button>
+          <button id="btn-select-safe" class="btn btn-sm">仅安全项</button>
+          <button id="btn-clean" class="btn btn-sm btn-danger">清理选中</button>
+        </div>
+      </div>
+      <div class="chart" id="chart"></div>
+      <div class="list" id="list"></div>
+    </section>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="scan">扫描</button>
+      <button class="tab" data-tab="custom">自定义目录</button>
+      <button class="tab" data-tab="history">清理历史</button>
+    </nav>
+
+    <section id="tab-custom" class="panel hidden">
+      <h2>自定义缓存目录</h2>
+      <p class="hint">额外纳入扫描的目录（支持文件夹选择器）。</p>
+      <ul id="custom-list" class="dirlist"></ul>
+      <button id="btn-add-custom" class="btn btn-sm">+ 添加目录</button>
+
+      <h2>排除目录</h2>
+      <p class="hint">匹配到的路径将被跳过，不予清理。</p>
+      <ul id="exclude-list" class="dirlist"></ul>
+      <button id="btn-add-exclude" class="btn btn-sm">+ 添加排除项</button>
+    </section>
+
+    <section id="tab-history" class="panel hidden">
+      <h2>清理历史</h2>
+      <table class="hist">
+        <thead><tr><th>时间</th><th>大小</th><th>路径</th></tr></thead>
+        <tbody id="history-body"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <p id="modal-text"></p>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="btn btn-ghost">取消</button>
+        <button id="modal-ok" class="btn btn-danger">确认清理</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <div id="about" class="modal hidden">
+    <div class="modal-card about-card">
+      <div class="about-logo">🧹</div>
+      <h2>智能缓存清理工具</h2>
+      <p class="about-sub">跨平台 · 安全分级 · 一键释放空间</p>
+      <ul class="about-list">
+        <li><b>版本</b>：v3.1 (Wails GUI)</li>
+        <li><b>引擎</b>：Go 原生扫描 + 通用 Electron 缓存识别</li>
+        <li><b>支持</b>：Windows / macOS / Linux</li>
+      </ul>
+      <p class="about-tip">所有清理均按风险分级：<span class="badge ok">安全</span> 可放心清理，<span class="badge warn">谨慎</span> / <span class="badge risk">复核</span> 请确认后再操作。</p>
+      <div class="modal-actions"><button id="about-close" class="btn btn-primary">知道了</button></div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
