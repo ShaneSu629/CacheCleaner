@@ -12,5 +12,8 @@ CacheCleaner/history.json
 # 临时文件
 *.tmp
 
+# 本地推送辅助脚本（个人工具，勿提交到仓库）
+git_push.py
+
 # 项目私有数据 / 记忆目录（含本机路径与记忆，勿提交）
 .workbuddy/
