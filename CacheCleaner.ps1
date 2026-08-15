@@ -38,7 +38,13 @@ $Script:Config = @{
         'recycle', 'Recycle',
         'old', 'Old', '旧的',
         'backup', 'bak',
-        'data', 'Data'  # 有些 AppData 下的 data 目录可清理
+        'data', 'Data',                                          # 有些 AppData 下的 data 目录可清理
+        # Electron / VSCode 系 AI 工具的标准缓存目录名（精准识别国产/国外 Agent 缓存）
+        'cacheddata', 'gpucache', 'codecache', 'dawngraphitecache', 'dawnwebgpucache',
+        'cachedextensionvsixs', 'blob_storage', 'blobstorage', 'crashpad', 'shadercache',
+        'videodecodestats', 'serviceworker', 'service worker', 'databases', 'indexeddb',
+        'localstorage', 'sessionstorage', 'partitions', 'shareddictionary', 'modulardata',
+        'cachedconfigurations', 'cachedprofilesdata', 'network', 'user data'
     )
     # 缓存文件扩展名
     CacheExtensions = @(
@@ -57,6 +63,7 @@ $Script:Config = @{
 # ============================================================
 $Script:KnownCaches = @(
     # ─── AI 缓存（重点清理对象） ───
+    # Cursor
     @{Path="\.cursor";        Category="AI缓存"; Risk="Safe"; Desc="Cursor AI 编辑器缓存(代码补全历史等)"},
     @{Path="\.cursor\extensions"; Category="AI缓存"; Risk="Safe"; Desc="Cursor AI 扩展缓存"},
     @{Path="\.cursor\machineid"; Category="AI缓存"; Risk="Safe"; Desc="Cursor AI 机器标识(可重新生成)"},
@@ -64,26 +71,105 @@ $Script:KnownCaches = @(
     @{Path="\AppData\Roaming\Cursor\Cache"; Category="AI缓存"; Risk="Safe"; Desc="Cursor AI 全局缓存"},
     @{Path="\AppData\Roaming\Cursor\CachedData"; Category="AI缓存"; Risk="Safe"; Desc="Cursor AI 全局缓存数据"},
     @{Path="\AppData\Roaming\Cursor\Code Cache"; Category="AI缓存"; Risk="Safe"; Desc="Cursor AI 代码缓存"},
-    @{Path="\AppData\Local\Trae\Cache"; Category="AI缓存"; Risk="Safe"; Desc="Trae AI 编辑器缓存"},
-    @{Path="\AppData\Local\Trae\CachedData"; Category="AI缓存"; Risk="Safe"; Desc="Trae AI 缓存数据"},
-    @{Path="\AppData\Local\Trae\Code Cache"; Category="AI缓存"; Risk="Safe"; Desc="Trae AI 代码缓存"},
+    # VS Code（含 AI 扩展）
     @{Path="\AppData\Roaming\Code\Cache"; Category="AI缓存"; Risk="Safe"; Desc="VS Code 缓存(含AI扩展)"},
     @{Path="\AppData\Roaming\Code\CachedData"; Category="AI缓存"; Risk="Safe"; Desc="VS Code 缓存数据(含AI扩展)"},
     @{Path="\AppData\Roaming\Code\User\workspaceStorage"; Category="AI缓存"; Risk="Caution"; Desc="VS Code 工作区存储(重新打开项目会恢复)"},
     @{Path="\AppData\Roaming\Code\Code Cache"; Category="AI缓存"; Risk="Safe"; Desc="VS Code 代码缓存"},
+    @{Path="\.vscode\CachedData"; Category="AI缓存"; Risk="Safe"; Desc="VS Code 缓存数据(含AI扩展)"},
+    @{Path="\.vscode\extensions\.cache"; Category="AI缓存"; Risk="Safe"; Desc="VS Code 扩展缓存(含AI扩展)"},
+    @{Path="\.vscode\extensions\*\\.cache"; Category="AI缓存"; Risk="Safe"; Desc="VS Code 各扩展缓存"},
+    # GitHub Copilot
     @{Path="\AppData\Local\GitHubCopilot"; Category="AI缓存"; Risk="Safe"; Desc="GitHub Copilot AI 缓存"},
     @{Path="\AppData\Roaming\GitHub Copilot"; Category="AI缓存"; Risk="Caution"; Desc="GitHub Copilot 配置(清理后需重新登录)"},
     @{Path="\AppData\Local\Microsoft\VSComponents\Cache"; Category="AI缓存"; Risk="Safe"; Desc="VS 组件缓存(含AI组件)"},
+
+    # ─── Trae（字节，国内版数据根为 .trae-cn，Roaming 为 "Trae CN"）───
+    @{Path="\AppData\Roaming\Trae CN\CachedData"; Category="AI缓存"; Risk="Safe"; Desc="Trae AI 缓存数据(最大头,约197MB)"},
+    @{Path="\AppData\Roaming\Trae CN\Cache"; Category="AI缓存"; Risk="Safe"; Desc="Trae AI 缓存(约12MB)"},
+    @{Path="\AppData\Roaming\Trae CN\Code Cache"; Category="AI缓存"; Risk="Safe"; Desc="Trae AI 代码缓存"},
+    @{Path="\AppData\Roaming\Trae CN\GPUCache"; Category="AI缓存"; Risk="Safe"; Desc="Trae GPU 缓存"},
+    @{Path="\AppData\Roaming\Trae CN\DawnWebGPUCache"; Category="AI缓存"; Risk="Safe"; Desc="Trae WebGPU 缓存"},
+    @{Path="\AppData\Roaming\Trae CN\DawnGraphiteCache"; Category="AI缓存"; Risk="Safe"; Desc="Trae Graphite 缓存"},
+    @{Path="\AppData\Roaming\Trae CN\CachedExtensionVSIXs"; Category="AI缓存"; Risk="Safe"; Desc="Trae 扩展 VSIX 缓存"},
+    @{Path="\AppData\Roaming\Trae CN\Crashpad"; Category="AI缓存"; Risk="Safe"; Desc="Trae 崩溃报告"},
+    @{Path="\AppData\Roaming\Trae CN\Network"; Category="AI缓存"; Risk="Safe"; Desc="Trae 网络缓存"},
+    @{Path="\AppData\Roaming\Trae CN\blob_storage"; Category="AI缓存"; Risk="Safe"; Desc="Trae blob 存储"},
+    @{Path="\AppData\Roaming\Trae CN\Partitions"; Category="AI缓存"; Risk="Safe"; Desc="Trae 分区缓存(约22MB)"},
+    @{Path="\AppData\Roaming\Trae CN\logs"; Category="AI缓存"; Risk="Safe"; Desc="Trae 日志(约102MB)"},
+    @{Path="\AppData\Roaming\Trae CN\User"; Category="AI缓存"; Risk="Caution"; Desc="Trae 用户数据(含全局存储/工作区)"},
+    @{Path="\.trae-cn"; Category="AI缓存"; Risk="Review"; Desc="Trae 国内版数据根(含扩展/配置,清理需重装扩展)"},
+
+    # ─── WorkBuddy / CodeBuddy（腾讯）───
+    @{Path="\AppData\Local\@genieworkbuddy-desktop-updater"; Category="AI缓存"; Risk="Safe"; Desc="WorkBuddy 桌面更新器缓存(约395MB)"},
+    @{Path="\.workbuddy\tmp"; Category="AI缓存"; Risk="Safe"; Desc="WorkBuddy 临时文件(约11MB)"},
+    @{Path="\.workbuddy\logs"; Category="AI缓存"; Risk="Safe"; Desc="WorkBuddy 日志(约159MB)"},
+    @{Path="\.workbuddy\traces"; Category="AI缓存"; Risk="Safe"; Desc="WorkBuddy 追踪数据(约297MB)"},
+    @{Path="\.workbuddy\pending-telemetry"; Category="AI缓存"; Risk="Safe"; Desc="WorkBuddy 待发送遥测"},
+    @{Path="\.workbuddy\shell-snapshots"; Category="AI缓存"; Risk="Safe"; Desc="WorkBuddy 终端快照缓存"},
+    @{Path="\.workbuddy\audit-log"; Category="AI缓存"; Risk="Safe"; Desc="WorkBuddy 审计日志"},
+    @{Path="\.workbuddy\clipboard-images"; Category="AI缓存"; Risk="Safe"; Desc="WorkBuddy 剪贴板图片缓存(约16MB)"},
+    @{Path="\.workbuddy\blobs"; Category="AI缓存"; Risk="Caution"; Desc="WorkBuddy blob 缓存(约16MB)"},
+    @{Path="\.workbuddy\plugins"; Category="AI缓存"; Risk="Caution"; Desc="WorkBuddy 插件缓存(约178MB,清理需重载)"},
+    @{Path="\.workbuddy\workspace"; Category="AI缓存"; Risk="Caution"; Desc="WorkBuddy 工作区缓存(约86MB)"},
+    @{Path="\.workbuddy\connectors-marketplace"; Category="AI缓存"; Risk="Caution"; Desc="WorkBuddy 连接器市场缓存(约23MB)"},
+    @{Path="\.workbuddy\file-history"; Category="AI缓存"; Risk="Caution"; Desc="WorkBuddy 文件历史(约12MB)"},
+    @{Path="\.workbuddy\binaries"; Category="AI缓存"; Risk="Caution"; Desc="WorkBuddy 运行时(约513MB,清理需重下)"},
+    @{Path="\.workbuddy\app"; Category="AI缓存"; Risk="Caution"; Desc="WorkBuddy 应用缓存(约67MB)"},
+    @{Path="\.workbuddy\projects"; Category="AI缓存"; Risk="Review"; Desc="WorkBuddy 项目缓存(清理可解决'输出不准'但丢历史)"},
+    @{Path="\.workbuddy\sessions"; Category="AI缓存"; Risk="Review"; Desc="WorkBuddy 会话记录(清理可解决'输出不准')"},
+    @{Path="\.workbuddy\tasks"; Category="AI缓存"; Risk="Review"; Desc="WorkBuddy 任务缓存(清理可解决'输出不准')"},
+    @{Path="\.workbuddy\plans"; Category="AI缓存"; Risk="Review"; Desc="WorkBuddy 计划缓存"},
+    @{Path="\.workbuddy\artifact-index"; Category="AI缓存"; Risk="Review"; Desc="WorkBuddy 产物索引"},
+    @{Path="\AppData\Local\CodeBuddyExtension\Data"; Category="AI缓存"; Risk="Caution"; Desc="CodeBuddy 扩展数据"},
+    @{Path="\WorkBuddy"; Category="AI缓存"; Risk="Caution"; Desc="WorkBuddy 桌面数据/崩溃转储"},
+
+    # ─── 通义灵码 / Qoder（阿里）───
+    @{Path="\.lingma"; Category="AI缓存"; Risk="Review"; Desc="通义灵码/Qoder 数据(索引db可超5GB,清理需重建索引但释放巨大空间)"},
+    @{Path="\AppData\Local\.lingma"; Category="AI缓存"; Risk="Review"; Desc="通义灵码本地数据(同上)"},
+    @{Path="\.vscode\extensions\alibaba-cloud.tongyi-lingma-*"; Category="AI缓存"; Risk="Caution"; Desc="通义灵码 VS Code 插件包"},
+
+    # ─── Claude（Anthropic）───
+    @{Path="\.claude"; Category="AI缓存"; Risk="Review"; Desc="Claude Code 数据根(含 projects 会话历史,清理可解决'输出不准'但丢会话)"},
+    @{Path="\.claude\projects"; Category="AI缓存"; Risk="Review"; Desc="Claude Code 会话记录(可解决旧上下文导致的输出不准)"},
+    @{Path="\AppData\Roaming\Claude"; Category="AI缓存"; Risk="Caution"; Desc="Claude Desktop 缓存(清理需重登录)"},
+    @{Path="\AppData\Local\AnthropicClaude"; Category="AI缓存"; Risk="Safe"; Desc="Claude 运行时缓存"},
+
+    # ─── Windsurf / Codeium ───
+    @{Path="\.codeium\windsurf"; Category="AI缓存"; Risk="Review"; Desc="Windsurf Cascade 对话历史(清理丢对话)"},
+    @{Path="\AppData\Roaming\Windsurf\CachedData"; Category="AI缓存"; Risk="Safe"; Desc="Windsurf 缓存数据"},
+    @{Path="\AppData\Roaming\Windsurf\Cache"; Category="AI缓存"; Risk="Safe"; Desc="Windsurf 缓存"},
+    @{Path="\AppData\Roaming\Windsurf\Code Cache"; Category="AI缓存"; Risk="Safe"; Desc="Windsurf 代码缓存"},
+    @{Path="\AppData\Roaming\Windsurf\GPUCache"; Category="AI缓存"; Risk="Safe"; Desc="Windsurf GPU 缓存"},
+    @{Path="\AppData\Roaming\Windsurf\DawnWebGPUCache"; Category="AI缓存"; Risk="Safe"; Desc="Windsurf WebGPU 缓存"},
+    @{Path="\AppData\Roaming\Windsurf\DawnGraphiteCache"; Category="AI缓存"; Risk="Safe"; Desc="Windsurf Graphite 缓存"},
+    @{Path="\AppData\Roaming\Windsurf\CachedExtensionVSIXs"; Category="AI缓存"; Risk="Safe"; Desc="Windsurf 扩展 VSIX 缓存"},
+    @{Path="\AppData\Local\Windsurf"; Category="AI缓存"; Risk="Safe"; Desc="Windsurf Electron 缓存/Cookie"},
+    @{Path="\AppData\Roaming\Code\User\globalStorage\codeium-codeium"; Category="AI缓存"; Risk="Caution"; Desc="Codeium VS Code 扩展本地存储"},
+
+    # ─── 文心快码 Comate（百度）───
+    @{Path="\AppData\Roaming\Baidu\WenXInCode"; Category="AI缓存"; Risk="Caution"; Desc="文心快码(Comate)配置/缓存(清理需重登录)"},
+    @{Path="\AppData\Local\Baidu\WenXInCode"; Category="AI缓存"; Risk="Caution"; Desc="文心快码本地缓存"},
+    @{Path="\AppData\Roaming\Baidu\WenxinYiyan"; Category="AI缓存"; Risk="Caution"; Desc="文心一言配置(清理需重登录)"},
+    @{Path="\.vscode\extensions\baidu-comate-*"; Category="AI缓存"; Risk="Caution"; Desc="文心快码 VS Code 插件包"},
+
+    # ─── Cline / Continue（VS Code 扩展）───
+    @{Path="\AppData\Roaming\Code\User\globalStorage\saoudrizwan.claude-dev"; Category="AI缓存"; Risk="Caution"; Desc="Cline 扩展数据(任务历史/API Key缓存)"},
+    @{Path="\AppData\Roaming\Code\User\globalStorage\continue.continue"; Category="AI缓存"; Risk="Caution"; Desc="Continue 扩展数据(缓存/日志)"},
+
+    # ─── 豆包 Doubao（字节）───
+    @{Path="\AppData\Local\Doubao\User Data\Cache"; Category="AI缓存"; Risk="Safe"; Desc="豆包 缓存"},
+    @{Path="\AppData\Local\Doubao\User Data\Code Cache"; Category="AI缓存"; Risk="Safe"; Desc="豆包 代码缓存"},
+    @{Path="\AppData\Local\Doubao\User Data\GPUCache"; Category="AI缓存"; Risk="Safe"; Desc="豆包 GPU 缓存"},
+    @{Path="\AppData\Local\Doubao\User Data"; Category="AI缓存"; Risk="Caution"; Desc="豆包用户数据(含缓存/会话,约1.8GB)"},
+
+    # ─── 通用 AI 模型 / 包缓存 ───
     @{Path="\.cache";           Category="AI缓存"; Risk="Safe"; Desc="通用缓存目录(含AI模型缓存)"},
     @{Path="\.cache\huggingface"; Category="AI缓存"; Risk="Caution"; Desc="HuggingFace AI 模型缓存(可能较大)"},
     @{Path="\.cache\torch";     Category="AI缓存"; Risk="Safe"; Desc="PyTorch AI 模型缓存"},
     @{Path="\.cache\pip";       Category="AI缓存"; Risk="Safe"; Desc="pip AI 包缓存"},
     @{Path="\AppData\Local\ollama\models"; Category="AI缓存"; Risk="Review"; Desc="Ollama AI 本地模型(下载大模型,谨慎清理)"},
     @{Path="\AppData\Local\LM Studio\models"; Category="AI缓存"; Risk="Review"; Desc="LM Studio AI 模型(谨慎清理)"},
-    @{Path="\AppData\Local\CachedData"; Category="AI缓存"; Risk="Safe"; Desc="系统 AI 缓存数据"},
-    @{Path="\.vscode\CachedData"; Category="AI缓存"; Risk="Safe"; Desc="VS Code 缓存数据(含AI扩展)"},
-    @{Path="\.vscode\extensions\.cache"; Category="AI缓存"; Risk="Safe"; Desc="VS Code 扩展缓存(含AI扩展)"},
-    @{Path="\.vscode\extensions\*\\.cache"; Category="AI缓存"; Risk="Safe"; Desc="VS Code 各扩展缓存"},
 
     # ─── 浏览器缓存（安全） ───
     @{Path="\AppData\Local\Google\Chrome\User Data\Default\Cache"; Category="浏览器缓存"; Risk="Safe"; Desc="Chrome 浏览器缓存"},
@@ -267,26 +353,28 @@ function Find-KnownCaches {
         $current++
         $fullPath = $Config.UserHome + $cache.Path
         
-        # 支持通配符路径（如 JetBrains\*）
+        # 支持通配符路径（JetBrains\*\caches、.vscode\extensions\xxx-* 等通用展开）
         if ($fullPath.Contains('*')) {
-            $matchedDirs = Get-ChildItem -Path ($Config.UserHome + "\AppData\Roaming\JetBrains") -Directory -ErrorAction SilentlyContinue
-            foreach ($matchedDir in $matchedDirs) {
-                $subPath = $matchedDir.FullName + "\caches"
-                if (Test-Path $subPath) {
-                    $size = Get-DirectorySize -Path $subPath
-                    $results += [PSCustomObject]@{
-                        Path       = $subPath
-                        ShortPath  = "AppData\Roaming\JetBrains\$($matchedDir.Name)\caches"
-                        Category   = $cache.Category
-                        Risk       = $cache.Risk
-                        Desc       = $cache.Desc
-                        Size       = $size
-                        SizeStr    = Format-FileSize -Bytes $size
-                        FileCount  = Get-DirectoryFileCount -Path $subPath
-                        LastAccess = Get-DirectoryLastAccess -Path $subPath
+            try {
+                $matched = Resolve-Path -Path $fullPath -ErrorAction SilentlyContinue
+                foreach ($m in $matched) {
+                    $p = $m.Path
+                    if (Test-Path -Path $p -PathType Container) {
+                        $size = Get-DirectorySize -Path $p
+                        $results += [PSCustomObject]@{
+                            Path       = $p
+                            ShortPath  = $p.Substring($Config.UserHome.Length).TrimStart('\')
+                            Category   = $cache.Category
+                            Risk       = $cache.Risk
+                            Desc       = $cache.Desc
+                            Size       = $size
+                            SizeStr    = Format-FileSize -Bytes $size
+                            FileCount  = Get-DirectoryFileCount -Path $p
+                            LastAccess = Get-DirectoryLastAccess -Path $p
+                        }
                     }
                 }
-            }
+            } catch {}
             continue
         }
         
@@ -330,7 +418,7 @@ function Auto-DiscoverCaches {
     
     $alreadyKnown = $KnownCaches | ForEach-Object { $Config.UserHome + $_.Path }
     
-    $maxDepth = 3
+    $maxDepth = 5
     $checked = 0
     
     foreach ($root in $searchPaths) {
@@ -361,7 +449,7 @@ function Auto-DiscoverCaches {
                 # 跳过深层子目录（只检查3层以内）
                 $relativePath = $fullName.Substring($Config.UserHome.Length).TrimStart('\')
                 $depth = ($relativePath.Split('\') | Measure-Object).Count
-                if ($depth -gt 3) { continue }
+                if ($depth -gt 5) { continue }
                 
                 # 匹配关键词
                 $matched = $false
@@ -420,11 +508,161 @@ function Auto-DiscoverCaches {
             }
         } catch {}
     }
+
+    # 额外：扫描用户目录下的 AI 工具隐藏根目录（.trae-cn/.workbuddy/.claude 等），发现未收录的缓存
+    $aiHomeRoots = @('.cursor','.trae-cn','.trae','.claude','.workbuddy','.lingma','.codeium','.windsurf','.vscode','.gemini','.kimi','.aider','.continue')
+    foreach ($homeRoot in $aiHomeRoots) {
+        $hr = Join-Path $Config.UserHome $homeRoot
+        if (-not (Test-Path $hr)) { continue }
+        try {
+            $subDirs = Get-ChildItem -Path $hr -Directory -Recurse -Depth 4 -ErrorAction SilentlyContinue -Force
+            foreach ($sd in $subDirs) {
+                $fullName = $sd.FullName
+                $isKnown = $false
+                foreach ($known in $alreadyKnown) {
+                    if ($fullName -eq $known -or $fullName.StartsWith($known + '\')) { $isKnown = $true; break }
+                }
+                if ($isKnown) { continue }
+                $relativePath = $fullName.Substring($Config.UserHome.Length).TrimStart('\')
+                $depth = ($relativePath.Split('\') | Measure-Object).Count
+                if ($depth -gt 6) { continue }
+                $name = $sd.Name
+                $matched = $false
+                foreach ($keyword in $Config.CacheKeywords) {
+                    if ($name -match [regex]::Escape($keyword)) { $matched = $true; break }
+                }
+                if (-not $matched) {
+                    try {
+                        $files = Get-ChildItem -Path $fullName -File -ErrorAction SilentlyContinue -Force
+                        $extGroups = $files | Group-Object -Property Extension
+                        $cacheFileCount = 0
+                        foreach ($ext in $Config.CacheExtensions) {
+                            $match = $extGroups | Where-Object { $_.Name -eq $ext }
+                            if ($match) { $cacheFileCount += $match.Count }
+                        }
+                        if ($files.Count -gt 10 -and $cacheFileCount -gt 0 -and ($cacheFileCount / $files.Count) -gt 0.5) { $matched = $true }
+                    } catch {}
+                }
+                if ($matched) {
+                    $size = Get-DirectorySize -Path $fullName
+                    if ($size -eq 0) { continue }
+                    $risk = "Caution"
+                    $lowerName = $name.ToLower()
+                    if ($lowerName -match 'cache|temp|tmp|log|backup') { $risk = "Safe" }
+                    $discovered += [PSCustomObject]@{
+                        Path       = $fullName
+                        ShortPath  = $relativePath
+                        Category   = "自动发现(AI)"
+                        Risk       = $risk
+                        Desc       = "自动识别的 AI 工具缓存目录"
+                        Size       = $size
+                        SizeStr    = Format-FileSize -Bytes $size
+                        FileCount  = Get-DirectoryFileCount -Path $fullName
+                        LastAccess = Get-DirectoryLastAccess -Path $fullName
+                    }
+                }
+            }
+        } catch {}
+    }
     
     # 按大小降序排列，取前50个
     $discovered = $discovered | Sort-Object -Property Size -Descending | Select-Object -First 50
     Write-Host "  扫描完成，共检查 $checked 个目录" -ForegroundColor DarkGray
     return $discovered
+}
+
+# ============================================================
+# 通用 Electron 缓存结构扫描（自动添加规则的核心）
+# 不依赖工具名，只认 Electron/Chromium 标准缓存目录结构：
+#   CachedData / GPUCache / Code Cache / Dawn*Cache / blob_storage /
+#   Crashpad / IndexedDB / databases / Local Storage / Service Worker ...
+# 任何 Electron/VSCode 套壳的 AI 工具（无论叫什么名字、是否小众）
+# 都会产生这些标准缓存目录，因此无需手写清单即可自动识别。
+# ============================================================
+function Find-ElectronCaches {
+    Write-Host "  正在按缓存结构通用识别应用缓存(无视工具名)..." -ForegroundColor DarkGray
+
+    # 标准 Electron / Chromium 缓存目录名（结构特征，与工具名无关）
+    $cacheNames = @(
+        'Cache', 'Code Cache', 'GPUCache', 'CachedData', 'DawnWebGPUCache', 'DawnGraphiteCache',
+        'blob_storage', 'Crashpad', 'CrashpadMetrics', 'VideoDecodeStats', 'ShaderCache',
+        'GrShaderCache', 'GraphiteShaderCache', 'CachedExtensionVSIXs', 'CachedResources',
+        'CachedLicenses', 'CachedTools', 'DawnCache',
+        'IndexedDB', 'databases', 'Local Storage', 'Session Storage', 'Service Worker',
+        'workspaceStorage', 'Partitions', 'Network', 'AutofillStates', 'Extension State'
+    )
+    $cacheNameSet = New-Object 'System.Collections.Generic.HashSet[string]'([StringComparer]::OrdinalIgnoreCase)
+    foreach ($n in $cacheNames) { [void]$cacheNameSet.Add($n) }
+
+    # 纯缓存（Safe，Electron 会自动重建）；其余含会话/配置标 Caution
+    $safeNames = @(
+        'Cache', 'Code Cache', 'GPUCache', 'CachedData', 'DawnWebGPUCache', 'DawnGraphiteCache',
+        'blob_storage', 'Crashpad', 'CrashpadMetrics', 'VideoDecodeStats', 'ShaderCache',
+        'GrShaderCache', 'GraphiteShaderCache', 'CachedExtensionVSIXs', 'CachedResources',
+        'CachedLicenses', 'CachedTools', 'DawnCache'
+    )
+
+    $alreadyKnown = $KnownCaches | ForEach-Object { $Config.UserHome + $_.Path }
+    $results = @()
+
+    # 构造所有扫描起点：AppData 三目录 + 用户根下的隐藏 AI 工具根（.workbuddy / .trae-cn / 未来的 .newai 等）
+    # 用户根只扫隐藏前缀目录，绝不递归进 Documents/Downloads/Desktop 等用户数据
+    $scanTargets = New-Object 'System.Collections.Generic.List[string]'
+    $appDataRoots = @(
+        "$($Config.UserHome)\AppData\Local",
+        "$($Config.UserHome)\AppData\Roaming",
+        "$($Config.UserHome)\AppData\LocalLow"
+    )
+    foreach ($r in $appDataRoots) { if (Test-Path $r) { $scanTargets.Add($r) } }
+    try {
+        $homeHidden = Get-ChildItem -Path $Config.UserHome -Directory -Force -ErrorAction SilentlyContinue | `
+            Where-Object { $_.Name.StartsWith('.') }
+        foreach ($hh in $homeHidden) { $scanTargets.Add($hh.FullName) }
+    } catch {}
+
+    # 统一单循环：对每个起点浅递归(Depth 3)找标准缓存目录，归入所属应用（靠结构识别，不认工具名）
+    foreach ($scanPath in $scanTargets) {
+        try {
+            $dirs = Get-ChildItem -Path $scanPath -Directory -Recurse -Depth 3 -Force -ErrorAction SilentlyContinue | `
+                Where-Object { $cacheNameSet.Contains($_.Name) }
+            foreach ($d in $dirs) {
+                $full = $d.FullName
+                $skip = $false
+                foreach ($k in $alreadyKnown) {
+                    if ($full -eq $k -or $full.StartsWith($k + '\')) { $skip = $true; break }
+                }
+                if ($skip) { continue }
+                foreach ($ex in $Config.ExcludeDirs) {
+                    if ($full -match [regex]::Escape($ex)) { $skip = $true; break }
+                }
+                if ($skip) { continue }
+
+                $rel = $full.Substring($Config.UserHome.Length).TrimStart('\')
+                $parts = $rel.Split('\')
+                # 应用根：AppData\Xxx\<应用> 取第 3 段；用户根隐藏目录取第 1 段
+                $appName = if ($parts.Count -gt 2 -and $parts[0] -eq 'AppData') { $parts[2] } else { $parts[0] }
+
+                $size = Get-DirectorySize -Path $full
+                if ($size -eq 0) { continue }
+
+                $risk = if ($safeNames -contains $d.Name) { 'Safe' } else { 'Caution' }
+                $results += [PSCustomObject]@{
+                    Path       = $full
+                    ShortPath  = $rel
+                    Category   = "Electron缓存($appName)"
+                    Risk       = $risk
+                    Desc       = "通用识别的 $($d.Name) 缓存（归属应用: $appName）"
+                    Size       = $size
+                    SizeStr    = Format-FileSize -Bytes $size
+                    FileCount  = Get-DirectoryFileCount -Path $full
+                    LastAccess = Get-DirectoryLastAccess -Path $full
+                }
+            }
+        } catch {}
+    }
+
+    Write-Host "  通用识别完成，发现 $($results.Count) 个应用缓存目录" -ForegroundColor DarkGray
+    return $results
 }
 
 # ============================================================
@@ -918,9 +1156,13 @@ function Invoke-SmartScan {
     
     # 2. 智能发现
     $discovered = Auto-DiscoverCaches
-    
+
     # 3. 合并
     $allItems = $knownCaches + $discovered
+    # 一键扫描所有缓存时，叠加"无视工具名"的通用 Electron 缓存识别（自动发现未知工具）
+    if ($Filter -eq "all") {
+        $allItems += Find-ElectronCaches
+    }
     
     # 4. 按分类筛选
     if ($Filter -ne "all") {
@@ -1004,13 +1246,21 @@ function Invoke-DeepAIClean {
     
     # 2. 智能发现 AI 相关目录
     $discovered = Auto-DiscoverCaches | Where-Object { 
-        $_.ShortPath -match 'cursor|trae|code|ai|AI|intellicode|copilot|vscode|vs code|chat|gpt|claude|ollama|hugging|torch|tensorflow|pytorch|openai|anthropic|machine.?learn|model'
+        $_.ShortPath -match 'cursor|trae|code|ai|AI|intellicode|copilot|vscode|vs code|chat|gpt|claude|ollama|hugging|torch|tensorflow|pytorch|openai|anthropic|machine.?learn|model|workbuddy|lingma|qoder|windsurf|codeium|comate|baidu|cline|continue|doubao'
     }
-    
+
+    # 2.5 通用结构识别（无视工具名，自动发现任何 Electron 套壳的 AI/应用缓存）
+    # [1] 深度 AI 扫描聚焦 AI/编辑器类：仅纳入应用名疑似 AI/开发工具者，其余（浏览器/IM/网盘等）留给 [2] 一键扫描
+    $electronCaches = Find-ElectronCaches | Where-Object {
+        if ($_.Category -match '^Electron缓存\((.+)\)$') {
+            $matches[1] -match 'cursor|trae|claude|workbuddy|lingma|qoder|windsurf|codeium|code|copilot|aider|continue|kimi|doubao|cherry|codex|comate|qwen|gemini|chatgpt|openai|anthropic|ollama|hugging|vscode|github|gpt|deepseek|yuanbao|tongyi|zhipu|moonshot|minimax|step|agent|bot'
+        } else { $false }
+    }
+
     # 3. 合并去重
     $seen = @{}
     $allItems = @()
-    foreach ($item in ($aiCaches + $discovered)) {
+    foreach ($item in ($aiCaches + $discovered + $electronCaches)) {
         if (-not $seen.ContainsKey($item.Path)) {
             $seen[$item.Path] = $true
             $allItems += $item
@@ -1021,19 +1271,26 @@ function Invoke-DeepAIClean {
     Write-Host ""
     Write-Color "  正在深度扫描 AI 缓存文件..." -ForegroundColor DarkGray
     $aiCachePatterns = @(
-        "*.aicache", "*.aichat", "*.aicontext", "*.completions",
-        "*.suggestions", "*.copilot", "*.chatlog",
-        "*.conversation", "*.conversations",
-        "*.intellisense", "*.codeinsights",
-        "*.embeddings", "*.vector*",
-        "*.lspcache", "*.languageModel"
+        "*.jsonl",        # Claude / Cline 会话记录
+        "*.session",      # 会话快照
+        "*.state-vscdb",  # VSCode 状态数据库
+        "*.vscdb",        # VSCode 存储
+        "*.sqlite",       # 各类索引/历史库
+        "*.db"            # 缓存数据库(索引/历史)
     )
     
     $extraFiles = @()
     $searchRoots = @(
-        "$($Config.UserHome)\AppData\Roaming",
-        "$($Config.UserHome)\AppData\Local",
-        "$($Config.UserHome)"
+        "$($Config.UserHome)\.workbuddy",
+        "$($Config.UserHome)\.trae-cn",
+        "$($Config.UserHome)\.claude",
+        "$($Config.UserHome)\.lingma",
+        "$($Config.UserHome)\.codeium",
+        "$($Config.UserHome)\AppData\Roaming\Trae CN",
+        "$($Config.UserHome)\AppData\Roaming\Windsurf",
+        "$($Config.UserHome)\AppData\Roaming\Claude",
+        "$($Config.UserHome)\AppData\Local\Doubao",
+        "$($Config.UserHome)\AppData\Local\@genieworkbuddy-desktop-updater"
     )
     
     foreach ($root in $searchRoots) {
@@ -1079,12 +1336,21 @@ function Invoke-DeepAIClean {
     
     # 按子分类统计
     $aiGroups = $allItems | Group-Object -Property { 
-        if ($_.ShortPath -match 'cursor|\.cursor') { "Cursor AI" }
+        if ($_.ShortPath -match 'workbuddy') { "WorkBuddy" }
+        elseif ($_.ShortPath -match 'lingma|qoder') { "通义灵码/Qoder" }
+        elseif ($_.ShortPath -match 'windsurf|codeium') { "Windsurf/Codeium" }
+        elseif ($_.ShortPath -match 'comate|baidu|wenxin') { "文心快码/百度" }
+        elseif ($_.ShortPath -match 'cline') { "Cline" }
+        elseif ($_.ShortPath -match 'continue') { "Continue" }
+        elseif ($_.ShortPath -match 'doubao') { "豆包" }
+        elseif ($_.ShortPath -match 'cursor|\.cursor') { "Cursor AI" }
         elseif ($_.ShortPath -match 'trae|Trae') { "Trae AI" }
+        elseif ($_.ShortPath -match 'claude') { "Claude" }
         elseif ($_.ShortPath -match 'code|Code|vscode|VS Code') { "VS Code" }
         elseif ($_.ShortPath -match 'copilot|Copilot') { "GitHub Copilot" }
         elseif ($_.ShortPath -match 'ollama|hugging|torch|model') { "AI 模型" }
         elseif ($_.Category -eq "AI缓存(深度)") { "AI 缓存文件" }
+        elseif ($_.Category -match '^Electron缓存\((.+)\)$') { $matches[1] }
         else { "其他 AI 缓存" }
     }
     
