@@ -45,8 +45,16 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: '0'
-          GO111MODULE: 'on'
         run: |
+          export GO111MODULE=on
+          echo "--- diagnostics ---"
+          go version
+          go env GO111MODULE GOMOD GOPATH GOROOT
+          pwd
+          ls -la
+          echo "--- module download ---"
+          go mod download
+          echo "--- building ---"
           OUT="cachecleaner-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
           go build -trimpath -ldflags="-s -w" -o "$OUT" .
           echo "OUT=$OUT" >> "$GITHUB_ENV"
