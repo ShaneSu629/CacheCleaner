@@ -11,6 +11,9 @@ cli.exe
 icon.syso
 *.syso
 
+# 图标中间产物：icon.svg 是唯一源，各尺寸 PNG 由 build/windows/build_icon.py 生成
+build/windows/icon_*.png
+
 # build 输出目录
 build/bin/
 

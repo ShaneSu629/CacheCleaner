@@ -1,4 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!--
+    CacheCleaner 图标源文件（Win11 Fluent 风格）。
+    注意：本文件固定 512x512，由 build_icon.py 统一渲染后降采样，
+    不要直接改 width/height 去适配小尺寸。
+    设计要点：主体加粗、刷毛留大间隙、只保留 1 颗星，
+    保证 16px 下仍可辨认（细碎元素在小尺寸会糊成一团）。
+  -->
   <defs>
     <!-- Win11 强调蓝渐变 -->
     <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
@@ -6,6 +13,7 @@
       <stop offset="0.5" stop-color="#0078D4"/>
       <stop offset="1" stop-color="#005A9E"/>
     </linearGradient>
+    <!-- 顶部高光 / 底部压暗，模拟亚克力材质 -->
     <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/>
       <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.05"/>
@@ -14,36 +22,31 @@
     <clipPath id="tileClip">
       <rect x="0" y="0" width="512" height="512" rx="116" ry="116"/>
     </clipPath>
-    <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000" flood-opacity="0.18"/>
-    </filter>
   </defs>
 
   <!-- 圆角磁贴 -->
-  <g clip-path="url(#tileClip)" filter="url(#softShadow)">
+  <g clip-path="url(#tileClip)">
     <rect width="512" height="512" fill="url(#tile)"/>
     <rect width="512" height="512" fill="url(#gloss)"/>
   </g>
 
-  <g transform="translate(256 260) rotate(-35)" fill="#FFFFFF">
-    <!-- 扫帚手柄 -->
-    <rect x="-22" y="-166" width="44" height="216" rx="22"/>
+  <!-- 扫帚：整体几何中心居中于画布 (256,256) -->
+  <g transform="translate(219 212) rotate(-35)" fill="#FFFFFF">
+    <!-- 手柄 -->
+    <rect x="-30" y="-160" width="60" height="200" rx="30"/>
     <!-- 扫帚头连接环 -->
-    <rect x="-32" y="46" width="64" height="40" rx="14" fill="#E6F4FF"/>
+    <rect x="-46" y="32" width="92" height="50" rx="20" fill="#DCEEFF"/>
     <!-- 扫帚头主体 -->
-    <rect x="-58" y="80" width="116" height="52" rx="18" fill="#FFFFFF"/>
-    <!-- 刷毛：5 根下挂圆条 -->
-    <rect x="-42" y="128" width="16" height="78" rx="8"/>
-    <rect x="-23" y="128" width="16" height="92" rx="8"/>
-    <rect x="-4"   y="128" width="16" height="98" rx="8"/>
-    <rect x="15"  y="128" width="16" height="92" rx="8"/>
-    <rect x="34"  y="128" width="16" height="78" rx="8"/>
+    <rect x="-74" y="76" width="148" height="62" rx="24"/>
+    <!-- 刷毛：5 根粗条 + 大间隙，降采样后不会粘连 -->
+    <rect x="-66" y="132" width="20" height="78" rx="10"/>
+    <rect x="-38" y="132" width="20" height="96" rx="10"/>
+    <rect x="-10" y="132" width="20" height="104" rx="10"/>
+    <rect x="18"  y="132" width="20" height="96" rx="10"/>
+    <rect x="46"  y="132" width="20" height="78" rx="10"/>
   </g>
 
-  <!-- 闪光：大星星 + 两小星 -->
-  <g fill="#FFFFFF" transform="translate(0,0)">
-    <path d="M 350 120 l 22 58 58 22 -58 22 -22 58 -22 -58 -58 -22 58 -22 z" opacity="0.96"/>
-    <path d="M 145 155 l 13 34 34 13 -34 13 -13 34 -13 -34 -34 -13 34 -13 z" opacity="0.72"/>
-    <path d="M 310 385 l 10 26 26 10 -26 10 -10 26 -10 -26 -26 -10 26 -10 z" opacity="0.55"/>
-  </g>
+  <!-- 闪光：单颗四角星，避免小尺寸变成噪点 -->
+  <path fill="#FFFFFF" opacity="0.95"
+        d="M 368 118 l 17 45 45 17 -45 17 -17 45 -17 -45 -45 -17 45 -17 z"/>
 </svg>
