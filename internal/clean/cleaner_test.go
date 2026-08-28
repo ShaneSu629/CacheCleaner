@@ -27,9 +27,21 @@ func TestCleanRemovesAndRecordsHistoryOnce(t *testing.T) {
 	}
 	entries := []model.CacheEntry{{Path: cacheDir, ShortPath: "Cache", Size: 1024}}
 
-	freed, count, cleaned, failed := Clean(entries, cfg)
+	var got []Progress
+	freed, count, cleaned, failed := Clean(entries, cfg, func(p Progress) { got = append(got, p) })
 	if len(failed) != 0 {
 		t.Fatalf("不应有失败项: %v", failed)
+	}
+	// 进度回调：最后一次应为 done == total 且 100%
+	if len(got) == 0 {
+		t.Fatal("应至少回调一次进度")
+	}
+	last := got[len(got)-1]
+	if last.Done != last.Total || last.Total != 1 {
+		t.Errorf("末次进度应 done==total==1，实际 done=%d total=%d", last.Done, last.Total)
+	}
+	if last.Pct != 100 {
+		t.Errorf("末次进度应为 100%%，实际 %.1f", last.Pct)
 	}
 	if count != 1 || freed != 1024 || len(cleaned) != 1 {
 		t.Fatalf("清理结果不符: freed=%d count=%d cleaned=%d", freed, count, len(cleaned))
@@ -68,7 +80,7 @@ func TestCleanSkipsExcluded(t *testing.T) {
 	cfg.ExcludeDirs = []string{"logs"}
 	entries := []model.CacheEntry{{Path: cacheDir, ShortPath: "logs", Size: 10}}
 
-	freed, count, cleaned, failed := Clean(entries, cfg)
+	freed, count, cleaned, failed := Clean(entries, cfg, nil)
 	if count != 0 || freed != 0 || len(cleaned) != 0 || len(failed) != 0 {
 		t.Fatalf("被排除项应静默跳过: freed=%d count=%d cleaned=%d failed=%v", freed, count, len(cleaned), failed)
 	}

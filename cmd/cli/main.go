@@ -53,7 +53,12 @@ func runClean(cfg *config.Config, entries []model.CacheEntry) {
 	if !ok {
 		return
 	}
-	freed, count, _, failed := clean.Clean(chosen, cfg)
+	// 终端进度：单行 \r 刷新，避免刷屏
+	progress := func(p clean.Progress) {
+		fmt.Printf("\r  清理中 [%d/%d] %s   ", p.Done, p.Total, p.Path)
+	}
+	freed, count, _, failed := clean.Clean(chosen, cfg, progress)
+	fmt.Print("\r\033[K") // 清掉进度行
 	fmt.Println()
 	fmt.Printf("已清理 %d 项, 释放 %s\n", count, ui.FormatSize(freed))
 	for _, f := range failed {

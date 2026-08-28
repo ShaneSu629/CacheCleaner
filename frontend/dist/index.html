@@ -313,6 +313,19 @@
   </div>
 </div>
 
+<!-- ── 清理进度（全局浮动条：清理大目录时可能持续数分钟） ── -->
+<div class="taskbar acrylic" id="clean-bar" hidden>
+  <span class="taskbar-icon"><svg class="icon"><use href="#i-trash"/></svg></span>
+  <div class="taskbar-body">
+    <div class="taskbar-head">
+      <span id="clean-text">清理中…</span>
+      <span class="progress-pct" id="clean-pct">0%</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="clean-fill"></div></div>
+    <span class="taskbar-sub" id="clean-sub"></span>
+  </div>
+</div>
+
 <div class="toast acrylic" id="toast" hidden></div>
 
 <script src="/app.js"></script>

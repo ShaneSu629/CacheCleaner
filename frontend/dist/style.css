@@ -560,6 +560,36 @@ button { font: inherit; color: inherit; }
 .about-list span { color: var(--text-3); }
 .about-tip { font-size: 12.5px; color: var(--text-2); line-height: 1.7; margin-bottom: 16px; }
 
+/* 清理进度：底部居中的浮动任务条（Acrylic） */
+.taskbar {
+  position: fixed; left: 50%; bottom: 28px; z-index: 65;
+  transform: translateX(-50%);
+  display: flex; align-items: flex-start; gap: 12px;
+  width: min(460px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  background: var(--acrylic-strong);
+  box-shadow: var(--elevation-dialog);
+  animation: taskbar-in var(--t-slow) var(--ease-decelerate);
+}
+.taskbar[hidden] { display: none; }
+@keyframes taskbar-in {
+  from { opacity: 0; transform: translate(-50%, 16px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.taskbar-icon {
+  width: 30px; height: 30px; flex: none; border-radius: 8px;
+  display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent);
+}
+.taskbar-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.taskbar-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.taskbar-head span:first-child { font-size: 13px; font-weight: 600; }
+.taskbar-sub {
+  font-size: 11.5px; color: var(--text-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 .toast {
   position: fixed; left: 50%; bottom: 28px; z-index: 70;
   transform: translateX(-50%);
@@ -644,6 +674,7 @@ button { font: inherit; color: inherit; }
 
   .list { max-height: none; }
   .toast { bottom: 84px; }
+  .taskbar { bottom: 84px; width: calc(100vw - 28px); }
   .hist td:last-child { max-width: 220px; }
 }
 

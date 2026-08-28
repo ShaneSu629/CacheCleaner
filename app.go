@@ -98,6 +98,15 @@ func (a *App) domReady(ctx context.Context) {}
 // 关闭前不拦截：直接允许退出。
 func (a *App) beforeClose(ctx context.Context) bool { return false }
 
+// emit 向前端广播事件。ctx 未就绪时（启动未完成或单测环境）静默跳过，
+// 避免 Wails runtime 因无效 context 打印错误日志。
+func (a *App) emit(event string, data ...interface{}) {
+	if a.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(a.ctx, event, data...)
+}
+
 func toDTO(e model.CacheEntry) EntryDTO {
 	return EntryDTO{
 		Path:      e.Path,
@@ -126,7 +135,7 @@ func (a *App) Scan(mode string) {
 	a.mu.Lock()
 	if a.scanning {
 		a.mu.Unlock()
-		runtime.EventsEmit(a.ctx, "scan:busy", nil)
+		a.emit("scan:busy", nil)
 		return
 	}
 	a.scanning = true
@@ -147,7 +156,7 @@ func (a *App) Scan(mode string) {
 			} else {
 				pct = float64(step-1) / float64(stepTotal) * 100
 			}
-			runtime.EventsEmit(a.ctx, "scan:progress", map[string]interface{}{
+			a.emit("scan:progress", map[string]interface{}{
 				"phase":     phase,
 				"done":      done,
 				"total":     total,
@@ -178,7 +187,7 @@ func (a *App) Scan(mode string) {
 		}
 		a.mu.Unlock()
 
-		runtime.EventsEmit(a.ctx, "scan:done", dtos)
+		a.emit("scan:done", dtos)
 	}()
 }
 
@@ -210,7 +219,19 @@ func (a *App) CleanSelected(paths []string) CleanResult {
 	if len(chosen) == 0 {
 		return CleanResult{}
 	}
-	freed, count, cleaned, failed := clean.Clean(chosen, cfg)
+	// 清理可能耗时数分钟（删除几十 GB 的缓存目录），逐项回传进度避免界面"假死"
+	emitCleanProgress := func(p clean.Progress) {
+		a.emit("clean:progress", map[string]interface{}{
+			"done":       p.Done,
+			"total":      p.Total,
+			"freed":      p.Freed,
+			"totalBytes": p.TotalBytes,
+			"path":       p.Path,
+			"pct":        p.Pct,
+		})
+	}
+	emitCleanProgress(clean.Progress{Total: len(chosen), Path: "准备清理…"})
+	freed, count, cleaned, failed := clean.Clean(chosen, cfg, emitCleanProgress)
 	result := CleanResult{Freed: freed, Count: count}
 	cleanedSet := make(map[string]bool, len(cleaned))
 	for _, e := range cleaned {
@@ -348,7 +369,14 @@ func (a *App) CleanRegistry(keys []string) CleanResult {
 	for _, e := range chosen {
 		names = append(names, e.Key)
 	}
+	// 注册表清理很快，但仍回传首尾两个进度事件，让界面进度条表现一致（起 → 满）
+	a.emit("clean:progress", map[string]interface{}{
+		"done": 0, "total": len(names), "freed": int64(0), "totalBytes": int64(0), "path": "准备清理…", "pct": float64(0),
+	})
 	cleaned, failed := regclean.Clean(names)
+	a.emit("clean:progress", map[string]interface{}{
+		"done": len(names), "total": len(names), "freed": int64(0), "totalBytes": int64(0), "path": "清理完成", "pct": float64(100),
+	})
 
 	var result CleanResult
 	now := time.Now().Format("2006-01-02 15:04:05")

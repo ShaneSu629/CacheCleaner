@@ -110,6 +110,48 @@ document.addEventListener('keydown', (e) => {
   else if (!$('#about').hidden) show($('#about'), false);
 });
 
+/* ── 清理进度（删除大目录可能持续数分钟，必须让用户看到进展） ───────── */
+
+let cleanHideTimer = null;
+
+function setCleaning(on) {
+  $('#btn-clean').disabled = on;
+  $('#btn-reg-clean').disabled = on;
+  $('#btn-select-all').disabled = on;
+  $('#btn-select-safe').disabled = on;
+  $('#btn-reg-select-all').disabled = on;
+  $('#btn-reg-select-safe').disabled = on;
+  if (!on) return;
+  // 起手先显示进度条，等后端第一个事件再更新数值
+  const bar = $('#clean-bar');
+  show(bar, true);
+  $('#clean-text').textContent = '准备清理…';
+  $('#clean-pct').textContent = '0%';
+  $('#clean-fill').style.width = '0%';
+  $('#clean-sub').textContent = '';
+}
+
+window.runtime.EventsOn('clean:progress', (p) => {
+  const bar = $('#clean-bar');
+  show(bar, true);
+  const total = p.total || 0;
+  $('#clean-text').textContent = total ? `清理中 ${p.done}/${total} 项` : '清理中…';
+  const pct = p.pct || 0;
+  $('#clean-pct').textContent = Math.round(pct) + '%';
+  $('#clean-fill').style.width = pct.toFixed(1) + '%';
+
+  const parts = [];
+  if (p.path) parts.push('正在处理：' + p.path);
+  if (p.freed) parts.push('已释放 ' + fmtSize(p.freed));
+  $('#clean-sub').textContent = parts.join(' · ');
+
+  clearTimeout(cleanHideTimer);
+  if (total && p.done >= total) {
+    $('#clean-text').textContent = '清理完成';
+    cleanHideTimer = setTimeout(() => show(bar, false), 1400);
+  }
+});
+
 /* ── 文件缓存扫描 ───────────────────────────────────────────────────── */
 
 function setScanning(on) {
@@ -209,7 +251,13 @@ $('#btn-clean').onclick = async () => {
   if (!paths.length) { toast('请先勾选要清理的项'); return; }
   const ok = await confirmModal(`确认清理 ${paths.length} 项？将释放约 ${fmtSize(selectedSize())}。`, '确认清理缓存');
   if (!ok) return;
-  const res = await call('CleanSelected', paths);
+  setCleaning(true);
+  let res;
+  try {
+    res = await call('CleanSelected', paths);
+  } finally {
+    setCleaning(false);
+  }
   toast(`已清理 ${res.count} 项，释放 ${fmtSize(res.freed)}` +
     (res.failed && res.failed.length ? `（失败 ${res.failed.length} 项）` : ''));
   // 只移除真正清理成功的项，失败/被排除的项保留供重试
@@ -283,7 +331,13 @@ $('#btn-reg-clean').onclick = async () => {
   if (!keys.length) { toast('请先勾选要清理的注册表项'); return; }
   const ok = await confirmModal(`确认清理 ${keys.length} 个注册表项？注册表操作不可恢复。`, '确认清理注册表');
   if (!ok) return;
-  const res = await call('CleanRegistry', keys);
+  setCleaning(true);
+  let res;
+  try {
+    res = await call('CleanRegistry', keys);
+  } finally {
+    setCleaning(false);
+  }
   toast(`已清理 ${res.count} 个注册表项，释放约 ${fmtSize(res.freed)}` +
     (res.failed && res.failed.length ? `（失败 ${res.failed.length} 项）` : ''));
   const cleaned = new Set(res.cleaned || []);
