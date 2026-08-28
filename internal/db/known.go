@@ -103,10 +103,22 @@ func knownWindows() []knownDef {
 		{"windows", config.BaseLocal, "ollama/models", "AI模型", model.RiskReview, "Ollama 本地模型(下载大模型,谨慎清理)"},
 		{"windows", config.BaseLocal, "LM Studio/models", "AI模型", model.RiskReview, "LM Studio 模型(谨慎清理)"},
 		{"windows", config.BaseLocal, "lm-studio/models", "AI模型", model.RiskReview, "LM Studio 模型(谨慎清理)"},
-		// 豆包 Doubao
-		{"windows", config.BaseLocal, "Doubao", "AI缓存", model.RiskSafe, "豆包缓存"},
-		{"windows", config.BaseLocal, "Doubao/User Data", "AI缓存", model.RiskCaution, "豆包用户数据"},
-		{"windows", config.BaseRoaming, "Doubao", "AI缓存", model.RiskCaution, "豆包配置"},
+		// 豆包 Doubao（Electron/Chromium 结构：登录态在 User Data 根与 Default 下的
+		// Cookies/Local State/IndexedDB 等文件，只清理纯缓存子目录，绝不碰整目录）
+		{"windows", config.BaseLocal, "Doubao/User Data/Default/Cache", "AI缓存", model.RiskSafe, "豆包网页缓存"},
+		{"windows", config.BaseLocal, "Doubao/User Data/Default/Code Cache", "AI缓存", model.RiskSafe, "豆包代码缓存"},
+		{"windows", config.BaseLocal, "Doubao/User Data/Default/GPUCache", "AI缓存", model.RiskSafe, "豆包 GPU 缓存"},
+		{"windows", config.BaseLocal, "Doubao/User Data/Default/DawnGraphiteCache", "AI缓存", model.RiskSafe, "豆包图形缓存"},
+		{"windows", config.BaseLocal, "Doubao/User Data/Default/DawnWebGPUCache", "AI缓存", model.RiskSafe, "豆包 WebGPU 缓存"},
+		{"windows", config.BaseLocal, "Doubao/User Data/Default/blob_storage", "AI缓存", model.RiskSafe, "豆包 blob 存储"},
+		{"windows", config.BaseLocal, "Doubao/User Data/GrShaderCache", "AI缓存", model.RiskSafe, "豆包着色器缓存"},
+		{"windows", config.BaseLocal, "Doubao/User Data/GraphiteDawnCache", "AI缓存", model.RiskSafe, "豆包图形缓存"},
+		{"windows", config.BaseLocal, "Doubao/User Data/ShaderCache", "AI缓存", model.RiskSafe, "豆对着色器缓存"},
+		{"windows", config.BaseLocal, "Doubao/User Data/Crashpad", "AI缓存", model.RiskSafe, "豆包崩溃报告缓存"},
+		{"windows", config.BaseLocal, "Doubao/User Data/component_crx_cache", "AI缓存", model.RiskSafe, "豆包组件缓存"},
+		{"windows", config.BaseLocal, "Doubao/User Data/extensions_crx_cache", "AI缓存", model.RiskSafe, "豆包扩展缓存"},
+		{"windows", config.BaseLocal, "Doubao/User Data/update_downloads", "升级缓存", model.RiskSafe, "豆包升级下载缓存(重新下载即可)"},
+		{"windows", config.BaseLocal, "Doubao/User Data/update_data", "升级缓存", model.RiskCaution, "豆包升级元数据"},
 		// DeepSeek
 		{"windows", config.BaseRoaming, "DeepSeek/Cache", "AI缓存", model.RiskSafe, "DeepSeek 桌面版缓存"},
 		{"windows", config.BaseRoaming, "DeepSeek", "AI缓存", model.RiskCaution, "DeepSeek 桌面版数据"},
@@ -115,6 +127,22 @@ func knownWindows() []knownDef {
 		{"windows", config.BaseLocal, "Microsoft/Edge/User Data/Default/Cache", "浏览器缓存", model.RiskSafe, "Edge 浏览器缓存"},
 		{"windows", config.BaseLocal, "Google/Chrome/User Data/Default/Cache", "浏览器缓存", model.RiskSafe, "Chrome 浏览器缓存"},
 		{"windows", config.BaseLocal, "Temp", "系统缓存", model.RiskSafe, "系统临时文件"},
+
+		// ── 系统软件升级缓存（本机取证：微信 4.x 升级缓存可达 GB 级，此前全部漏扫）──
+		// 腾讯系升级缓存
+		{"windows", config.BaseRoaming, "Tencent/xwechat/update", "升级缓存", model.RiskSafe, "微信 4.x 升级下载缓存(清后升级包重新下载)"},
+		{"windows", config.BaseRoaming, "Tencent/WXWork/Update", "升级缓存", model.RiskSafe, "企业微信升级缓存"},
+		{"windows", config.BaseRoaming, "Tencent/WeMail/downloading", "升级缓存", model.RiskCaution, "QQ邮箱下载缓存(清理中邮件需重新下载)"},
+		{"windows", config.BaseRoaming, "Tencent/WeChat/XPlugin", "升级缓存", model.RiskCaution, "微信 3.x 插件/升级缓存"},
+		// Electron/Squirrel 安装器升级临时目录
+		{"windows", config.BaseLocal, "SquirrelTemp", "升级缓存", model.RiskSafe, "Electron 应用安装器升级临时目录"},
+		// 系统级升级缓存（ProgramData / Windows 目录，部分需管理员权限，删除失败会列入失败项）
+		{"windows", config.BaseProgramData, "Package Cache", "升级缓存", model.RiskReview, "应用安装器引导缓存(VS/VC++ 运行库等,删除影响卸载与修复,谨慎)"},
+		{"windows", config.BaseProgramData, "NVIDIA Corporation/Downloader", "升级缓存", model.RiskSafe, "NVIDIA 驱动下载缓存"},
+		{"windows", config.BaseProgramData, "NVIDIA Corporation/Installer2", "升级缓存", model.RiskReview, "NVIDIA 安装器缓存(删除影响驱动卸载,谨慎)"},
+		{"windows", config.BaseWindows, "SoftwareDistribution/Download", "升级缓存", model.RiskReview, "Windows 更新下载缓存(需管理员权限)"},
+		{"windows", config.BaseWindows, "ServiceProfiles/NetworkService/AppData/Local/Microsoft/Windows/DeliveryOptimization/Cache", "升级缓存", model.RiskReview, "Windows 传递优化缓存(需管理员权限)"},
+		{"windows", config.BaseWindows, "Temp", "系统缓存", model.RiskCaution, "系统级临时目录(需管理员权限)"},
 	}
 }
 
@@ -144,9 +172,8 @@ func knownDarwin() []knownDef {
 		// Ollama / LM Studio
 		{"darwin", config.BaseRoaming, "Ollama/models", "AI模型", model.RiskReview, "Ollama 本地模型"},
 		{"darwin", config.BaseRoaming, "LMStudio", "AI模型", model.RiskReview, "LM Studio 数据"},
-		// 豆包
+		// 豆包（只清缓存子目录，整目录含登录/配置，不清）
 		{"darwin", config.BaseRoaming, "Doubao/cache", "AI缓存", model.RiskSafe, "豆包缓存"},
-		{"darwin", config.BaseRoaming, "Doubao", "AI缓存", model.RiskCaution, "豆包数据"},
 		// 常见浏览器/应用
 		{"darwin", config.BaseLocal, "com.google.Chrome", "浏览器缓存", model.RiskSafe, "Chrome 系统缓存"},
 		{"darwin", config.BaseLocal, "com.microsoft.Edge", "浏览器缓存", model.RiskSafe, "Edge 系统缓存"},
@@ -180,9 +207,8 @@ func knownLinux() []knownDef {
 		// Ollama / LM Studio
 		{"linux", config.BaseRoaming, "ollama/models", "AI模型", model.RiskReview, "Ollama 本地模型"},
 		{"linux", config.BaseLocal, "lm-studio/models", "AI模型", model.RiskReview, "LM Studio 模型"},
-		// 豆包
+		// 豆包（只清缓存子目录，整目录含登录/配置，不清）
 		{"linux", config.BaseRoaming, "Doubao/cache", "AI缓存", model.RiskSafe, "豆包缓存"},
-		{"linux", config.BaseRoaming, "Doubao", "AI缓存", model.RiskCaution, "豆包数据"},
 		// 常见浏览器
 		{"linux", config.BaseLocal, "google-chrome", "浏览器缓存", model.RiskSafe, "Chrome 缓存"},
 		{"linux", config.BaseLocal, "microsoft-edge", "浏览器缓存", model.RiskSafe, "Edge 缓存"},

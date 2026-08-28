@@ -51,8 +51,25 @@
     <nav class="tabs">
       <button class="tab active" data-tab="scan">扫描</button>
       <button class="tab" data-tab="custom">自定义目录</button>
+      <button class="tab" data-tab="registry">注册表</button>
       <button class="tab" data-tab="history">清理历史</button>
     </nav>
+
+    <section id="tab-registry" class="panel hidden">
+      <h2>注册表垃圾清理</h2>
+      <p class="hint">仅清理「运行/最近文档/对话框 MRU、程序名缓存」等系统可自动重建的衍生数据，
+        只删键值、不删键；<b>注册表操作不可恢复</b>，建议优先清理“安全”项。</p>
+      <div class="results-head">
+        <div class="stats" id="reg-stats">未扫描</div>
+        <div class="result-actions">
+          <button id="btn-reg-scan" class="btn btn-sm">扫描注册表</button>
+          <button id="btn-reg-select-safe" class="btn btn-sm">仅安全项</button>
+          <button id="btn-reg-select-all" class="btn btn-sm">全选</button>
+          <button id="btn-reg-clean" class="btn btn-sm btn-danger">清理选中</button>
+        </div>
+      </div>
+      <div class="list" id="reg-list"></div>
+    </section>
 
     <section id="tab-custom" class="panel hidden">
       <h2>自定义缓存目录</h2>

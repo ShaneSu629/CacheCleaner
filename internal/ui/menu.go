@@ -8,13 +8,18 @@ import (
 	"strings"
 
 	"cachecleaner/internal/model"
+	"cachecleaner/internal/regclean"
 )
+
+// stdin 是共享的单例 Reader。
+// 此前 Prompt 每次调用都 bufio.NewReader(os.Stdin)，一次输入多行时，
+// 缓冲在旧 Reader 里的后续行会被直接丢弃（粘贴多行选项时丢输入）。
+var stdin = bufio.NewReader(os.Stdin)
 
 // Prompt 读取单行用户输入。遇到 EOF（无交互/管道结束）时返回空字符串。
 func Prompt(msg string) string {
 	fmt.Print(msg)
-	r := bufio.NewReader(os.Stdin)
-	line, err := r.ReadString('\n')
+	line, err := stdin.ReadString('\n')
 	if err != nil && len(line) == 0 {
 		return ""
 	}
@@ -31,6 +36,7 @@ func ShowMainMenu() int {
 	fmt.Println("  [2] 一键扫描所有缓存（含浏览器/IM/网盘）")
 	fmt.Println("  [3] 自定义缓存目录管理")
 	fmt.Println("  [4] 查看清理历史")
+	fmt.Println("  [5] 注册表垃圾清理（仅 Windows）")
 	fmt.Println("  [0] 退出")
 	fmt.Println()
 
@@ -92,6 +98,57 @@ func SelectEntries(entries []model.CacheEntry) ([]model.CacheEntry, bool) {
 	}
 	confirm := Prompt(fmt.Sprintf("确认清理 %s 项 (释放约 %s)? [y/N] ",
 		col(strconv.Itoa(len(chosen)), cCyan), col(FormatSize(sz), cGreen)))
+	if confirm != "y" && confirm != "Y" {
+		fmt.Println("已取消。")
+		return nil, false
+	}
+	return chosen, true
+}
+
+// SelectRegistry 展示注册表垃圾项并让用户选择要清理的项（注册表不可恢复，默认只选安全项）。
+func SelectRegistry(entries []regclean.Entry) ([]regclean.Entry, bool) {
+	if len(entries) == 0 {
+		fmt.Println(col("未发现可清理的注册表项。", cYellow))
+		return nil, false
+	}
+
+	fmt.Println()
+	fmt.Println("选择要清理的项: 输入编号(逗号分隔), 或")
+	fmt.Println("  safe = 仅清理[安全]项（推荐）    all = 全部    q = 取消")
+	fmt.Println(col("注意：注册表清理不可恢复，请确认后再执行。", cYellow))
+	input := Prompt("> ")
+
+	if input == "" || input == "q" || input == "Q" {
+		return nil, false
+	}
+
+	var chosen []regclean.Entry
+	switch input {
+	case "all", "ALL":
+		chosen = append(chosen, entries...)
+	case "safe", "SAFE":
+		for _, e := range entries {
+			if e.Risk == model.RiskSafe {
+				chosen = append(chosen, e)
+			}
+		}
+	default:
+		for _, part := range strings.Split(input, ",") {
+			part = strings.TrimSpace(part)
+			n, err := strconv.Atoi(part)
+			if err != nil || n < 1 || n > len(entries) {
+				continue
+			}
+			chosen = append(chosen, entries[n-1])
+		}
+	}
+
+	if len(chosen) == 0 {
+		fmt.Println(col("未选择任何项。", cYellow))
+		return nil, false
+	}
+
+	confirm := Prompt(fmt.Sprintf("确认清理 %s 个注册表项? [y/N] ", col(strconv.Itoa(len(chosen)), cCyan)))
 	if confirm != "y" && confirm != "Y" {
 		fmt.Println("已取消。")
 		return nil, false

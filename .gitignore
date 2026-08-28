@@ -25,3 +25,6 @@ FyneUI-Plan.md
 
 # 项目私有数据 / 记忆目录（含本机路径与记忆，勿提交）
 .workbuddy/
+
+# 本地临时 Go 工具链（代码审查用，勿提交）
+.gotoolchain/

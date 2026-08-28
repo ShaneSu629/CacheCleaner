@@ -6,6 +6,8 @@ export function AddCustomDir(arg1:string):Promise<void>;
 
 export function AddExcludeDir(arg1:string):Promise<void>;
 
+export function CleanRegistry(arg1:Array<string>):Promise<main.CleanResult>;
+
 export function CleanSelected(arg1:Array<string>):Promise<main.CleanResult>;
 
 export function GetCustomDirs():Promise<Array<string>>;
@@ -19,3 +21,5 @@ export function RemoveCustomDir(arg1:string):Promise<void>;
 export function RemoveExcludeDir(arg1:string):Promise<void>;
 
 export function Scan(arg1:string):Promise<void>;
+
+export function ScanRegistry():Promise<Array<main.RegEntryDTO>>;

@@ -4,11 +4,14 @@ import (
 	"context"
 	"embed"
 	"sort"
+	"strings"
 	"sync"
+	"time"
 
 	"cachecleaner/internal/clean"
 	"cachecleaner/internal/config"
 	"cachecleaner/internal/model"
+	"cachecleaner/internal/regclean"
 	"cachecleaner/internal/scan"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -33,20 +36,44 @@ type HistoryDTO struct {
 	Size int64  `json:"size"`
 }
 
-// CleanResult 是清理结果。
+// CleanFailure 是一条清理失败明细（路径 + 错误），便于前端精确保留失败项。
+type CleanFailure struct {
+	Path  string `json:"path"`
+	Error string `json:"error"`
+}
+
+// CleanResult 是清理结果。Cleaned 为成功清理的路径，前端据此移除列表项；
+// Failed 保留失败明细，失败项仍留在列表中供用户重试。
 type CleanResult struct {
-	Freed  int64    `json:"freed"`
-	Count  int64    `json:"count"`
-	Failed []string `json:"failed"`
+	Freed   int64          `json:"freed"`
+	Count   int64          `json:"count"`
+	Cleaned []string       `json:"cleaned"`
+	Failed  []CleanFailure `json:"failed"`
+}
+
+// RegEntryDTO 是传给前端的注册表垃圾项。
+type RegEntryDTO struct {
+	Key      string `json:"key"`
+	Category string `json:"category"`
+	Risk     string `json:"risk"`
+	Desc     string `json:"desc"`
+	Values   int    `json:"values"`
+	Size     int64  `json:"size"`
 }
 
 // App 是绑定到前端（window.go.main.App）的结构，承载所有 UI 操作。
 // 业务逻辑全部复用内部包，这里只做编排与序列化。
+//
+// 并发约定：Wails 的每个绑定调用都在独立 goroutine 执行，因此所有对 cfg、
+// lastEntries、lastRegEntries 的读写都必须持有 mu。cfg 指针本身在 startup 后不再替换。
 type App struct {
-	ctx         context.Context
-	cfg         *config.Config
-	mu          sync.Mutex
-	lastEntries map[string]model.CacheEntry
+	ctx            context.Context
+	cfg            *config.Config
+	mu             sync.Mutex
+	lastEntries    map[string]model.CacheEntry
+	lastRegEntries map[string]regclean.Entry
+	scanning       bool // 扫描重入保护（前端连点按钮会产生并发扫描）
+	cleaning       bool // 清理重入保护
 }
 
 func NewApp() *App { return &App{} }
@@ -55,16 +82,20 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	cfg, err := config.Load()
 	if err != nil {
-		runtime.LogError(a.ctx, "配置加载失败: "+err.Error())
-		return
+		// 配置加载失败也要保证 cfg 非 nil，否则后续所有绑定方法都会空指针 panic。
+		runtime.LogError(a.ctx, "配置加载失败，已回退默认配置: "+err.Error())
+		cfg = config.Default()
 	}
+	a.mu.Lock()
 	a.cfg = cfg
 	a.lastEntries = map[string]model.CacheEntry{}
+	a.lastRegEntries = map[string]regclean.Entry{}
+	a.mu.Unlock()
 }
 
 func (a *App) domReady(ctx context.Context) {}
 
-// 禁止关闭前拦截：直接允许退出。
+// 关闭前不拦截：直接允许退出。
 func (a *App) beforeClose(ctx context.Context) bool { return false }
 
 func toDTO(e model.CacheEntry) EntryDTO {
@@ -78,9 +109,37 @@ func toDTO(e model.CacheEntry) EntryDTO {
 	}
 }
 
+func toRegDTO(e regclean.Entry) RegEntryDTO {
+	return RegEntryDTO{
+		Key:      e.Key,
+		Category: e.Category,
+		Risk:     e.Risk.Label(),
+		Desc:     e.Desc,
+		Values:   e.Values,
+		Size:     e.Size,
+	}
+}
+
 // Scan 在后台执行扫描，过程通过 "scan:progress" 实时回传进度，结果通过 "scan:done" 回传（避免界面假死）。
+// 已有扫描在跑时直接忽略重复请求，避免两次扫描的进度/结果事件交错。
 func (a *App) Scan(mode string) {
+	a.mu.Lock()
+	if a.scanning {
+		a.mu.Unlock()
+		runtime.EventsEmit(a.ctx, "scan:busy", nil)
+		return
+	}
+	a.scanning = true
+	cfg := a.cfg
+	a.mu.Unlock()
+
 	go func() {
+		defer func() {
+			a.mu.Lock()
+			a.scanning = false
+			a.mu.Unlock()
+		}()
+
 		progress := func(phase string, done, total, step, stepTotal int) {
 			var pct float64
 			if total > 0 {
@@ -101,18 +160,21 @@ func (a *App) Scan(mode string) {
 		var entries []model.CacheEntry
 		switch mode {
 		case "ai":
-			entries = scan.DeepAIScan(a.cfg, progress)
+			entries = scan.DeepAIScan(cfg, progress)
 		default:
-			entries = scan.SmartScan(a.cfg, progress)
+			entries = scan.SmartScan(cfg, progress)
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].Size > entries[j].Size })
 
-		a.mu.Lock()
-		a.lastEntries = make(map[string]model.CacheEntry, len(entries))
 		dtos := make([]EntryDTO, 0, len(entries))
 		for _, e := range entries {
-			a.lastEntries[e.Path] = e
 			dtos = append(dtos, toDTO(e))
+		}
+
+		a.mu.Lock()
+		a.lastEntries = make(map[string]model.CacheEntry, len(entries))
+		for _, e := range entries {
+			a.lastEntries[e.Path] = e
 		}
 		a.mu.Unlock()
 
@@ -121,62 +183,194 @@ func (a *App) Scan(mode string) {
 }
 
 // CleanSelected 按路径清理选中的缓存项。
+// 只清理上一次扫描结果中的路径（不接受任意路径，避免越权删除）。
 func (a *App) CleanSelected(paths []string) CleanResult {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-
+	if a.cleaning {
+		a.mu.Unlock()
+		return CleanResult{}
+	}
+	a.cleaning = true
+	// 快照待清理项后立即释放锁：删除是耗时 IO，持锁会阻塞界面其他调用。
 	var chosen []model.CacheEntry
 	for _, p := range paths {
 		if e, ok := a.lastEntries[p]; ok {
 			chosen = append(chosen, e)
 		}
 	}
+	cfg := a.cfg
+	a.mu.Unlock()
+
+	defer func() {
+		a.mu.Lock()
+		a.cleaning = false
+		a.mu.Unlock()
+	}()
+
 	if len(chosen) == 0 {
 		return CleanResult{}
 	}
-	freed, count, failed := clean.Clean(chosen, a.cfg)
-	for _, e := range chosen {
+	freed, count, cleaned, failed := clean.Clean(chosen, cfg)
+	result := CleanResult{Freed: freed, Count: count}
+	cleanedSet := make(map[string]bool, len(cleaned))
+	for _, e := range cleaned {
+		cleanedSet[e.Path] = true
+		result.Cleaned = append(result.Cleaned, e.Path)
+	}
+
+	// 只有真正删掉的项才从扫描结果中移除：失败项与被排除项保留在列表里供重试
+	a.mu.Lock()
+	for _, e := range cleaned {
 		delete(a.lastEntries, e.Path)
 	}
-	return CleanResult{Freed: freed, Count: count, Failed: failed}
+	a.mu.Unlock()
+
+	for _, f := range failed {
+		result.Failed = append(result.Failed, splitFailure(f))
+	}
+	return result
 }
 
-func (a *App) GetCustomDirs() []string  { return a.cfg.CustomDirs }
-func (a *App) GetExcludeDirs() []string { return a.cfg.ExcludeDirs }
+// splitFailure 把 "路径: 错误" 拆为结构化字段（Windows 路径含盘符冒号，只按首个 ": " 切分）。
+func splitFailure(msg string) CleanFailure {
+	const sep = ": "
+	if i := strings.Index(msg, sep); i >= 0 {
+		return CleanFailure{Path: msg[:i], Error: msg[i+len(sep):]}
+	}
+	return CleanFailure{Path: msg, Error: msg}
+}
+
+// ── 自定义目录 / 排除目录（全部在锁内读写，避免与扫描 goroutine 数据竞争）──
+
+func (a *App) GetCustomDirs() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]string(nil), a.cfg.CustomDirs...)
+}
+
+func (a *App) GetExcludeDirs() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]string(nil), a.cfg.ExcludeDirs...)
+}
 
 func (a *App) AddCustomDir(p string) {
 	if p == "" {
 		return
 	}
+	a.mu.Lock()
 	a.cfg.CustomDirs = appendUnique(a.cfg.CustomDirs, p)
-	_ = a.cfg.Save()
+	a.saveLocked("保存自定义目录失败")
+	a.mu.Unlock()
 }
 
 func (a *App) AddExcludeDir(p string) {
 	if p == "" {
 		return
 	}
+	a.mu.Lock()
 	a.cfg.ExcludeDirs = appendUnique(a.cfg.ExcludeDirs, p)
-	_ = a.cfg.Save()
+	a.saveLocked("保存排除目录失败")
+	a.mu.Unlock()
 }
 
 func (a *App) RemoveCustomDir(p string) {
+	a.mu.Lock()
 	a.cfg.CustomDirs = removeStr(a.cfg.CustomDirs, p)
-	_ = a.cfg.Save()
+	a.saveLocked("移除自定义目录失败")
+	a.mu.Unlock()
 }
 
 func (a *App) RemoveExcludeDir(p string) {
+	a.mu.Lock()
 	a.cfg.ExcludeDirs = removeStr(a.cfg.ExcludeDirs, p)
-	_ = a.cfg.Save()
+	a.saveLocked("移除排除目录失败")
+	a.mu.Unlock()
+}
+
+// saveLocked 在持锁状态下保存配置并记录错误（调用方必须已持有 mu）。
+func (a *App) saveLocked(msg string) {
+	if err := a.cfg.Save(); err != nil && a.ctx != nil {
+		runtime.LogError(a.ctx, msg+": "+err.Error())
+	}
 }
 
 func (a *App) GetHistory() []HistoryDTO {
-	recs := clean.LoadHistory(a.cfg)
+	a.mu.Lock()
+	cfg := a.cfg
+	a.mu.Unlock() // 释放锁后再读文件，避免大文件读取阻塞界面
+
+	recs := clean.LoadHistory(cfg)
 	out := make([]HistoryDTO, 0, len(recs))
 	for _, r := range recs {
 		out = append(out, HistoryDTO{Time: r.Time, Path: r.Path, Size: r.Size})
 	}
 	return out
+}
+
+// ── 注册表清理 ──
+
+// ScanRegistry 扫描注册表垃圾项（同步调用，注册表扫描耗时在毫秒级）。
+func (a *App) ScanRegistry() []RegEntryDTO {
+	entries := regclean.Scan()
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Size > entries[j].Size })
+
+	a.mu.Lock()
+	a.lastRegEntries = make(map[string]regclean.Entry, len(entries))
+	for _, e := range entries {
+		a.lastRegEntries[e.Key] = e
+	}
+	a.mu.Unlock()
+
+	dtos := make([]RegEntryDTO, 0, len(entries))
+	for _, e := range entries {
+		dtos = append(dtos, toRegDTO(e))
+	}
+	return dtos
+}
+
+// CleanRegistry 清理选中的注册表项。只接受上一次扫描结果中的键（白名单 + 扫描结果双重校验）。
+func (a *App) CleanRegistry(keys []string) CleanResult {
+	a.mu.Lock()
+	var chosen []regclean.Entry
+	for _, k := range keys {
+		if e, ok := a.lastRegEntries[k]; ok {
+			chosen = append(chosen, e)
+		}
+	}
+	cfg := a.cfg
+	a.mu.Unlock()
+
+	if len(chosen) == 0 {
+		return CleanResult{}
+	}
+	names := make([]string, 0, len(chosen))
+	for _, e := range chosen {
+		names = append(names, e.Key)
+	}
+	cleaned, failed := regclean.Clean(names)
+
+	var result CleanResult
+	now := time.Now().Format("2006-01-02 15:04:05")
+	recs := make([]clean.HistoryRecord, 0, len(cleaned))
+	for _, e := range cleaned {
+		result.Freed += e.Size
+		result.Count++
+		result.Cleaned = append(result.Cleaned, e.Key)
+		recs = append(recs, clean.HistoryRecord{Time: now, Path: e.Key, Size: e.Size})
+	}
+	for _, f := range failed {
+		result.Failed = append(result.Failed, splitFailure(f))
+	}
+
+	a.mu.Lock()
+	for _, e := range cleaned {
+		delete(a.lastRegEntries, e.Key)
+	}
+	a.mu.Unlock()
+
+	clean.AppendHistory(cfg, recs)
+	return result
 }
 
 func appendUnique(s []string, v string) []string {
@@ -197,4 +391,3 @@ func removeStr(s []string, v string) []string {
 	}
 	return out
 }
-

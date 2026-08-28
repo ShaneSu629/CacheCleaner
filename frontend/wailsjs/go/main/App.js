@@ -10,6 +10,10 @@ export function AddExcludeDir(arg1) {
   return window['go']['main']['App']['AddExcludeDir'](arg1);
 }
 
+export function CleanRegistry(arg1) {
+  return window['go']['main']['App']['CleanRegistry'](arg1);
+}
+
 export function CleanSelected(arg1) {
   return window['go']['main']['App']['CleanSelected'](arg1);
 }
@@ -36,4 +40,8 @@ export function RemoveExcludeDir(arg1) {
 
 export function Scan(arg1) {
   return window['go']['main']['App']['Scan'](arg1);
+}
+
+export function ScanRegistry() {
+  return window['go']['main']['App']['ScanRegistry']();
 }

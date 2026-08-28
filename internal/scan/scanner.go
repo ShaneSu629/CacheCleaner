@@ -17,6 +17,9 @@ import (
 //   - step/stepTotal: 整体阶段的序号与总数（用于跨阶段连续显示进度）
 type ProgressFunc func(phase string, done, total int, step, stepTotal int)
 
+// 扫描阶段总数：已知缓存(1) / 自动发现(2) / 通用识别(3) / 自定义目录(4)
+const stepTotalAll = 4
+
 // report 安全调用进度回调（p 为 nil 时直接跳过）。
 func report(p ProgressFunc, phase string, done, total, step, stepTotal int) {
 	if p != nil {
@@ -26,18 +29,19 @@ func report(p ProgressFunc, phase string, done, total, step, stepTotal int) {
 
 // FindKnownCaches 返回当前系统下真实存在的已知缓存项。progress 可选，用于实时回传进度。
 func FindKnownCaches(cfg *config.Config, progress ProgressFunc) []model.CacheEntry {
-	report(progress, "扫描已知缓存", 0, 1, 1, 3)
+	report(progress, "扫描已知缓存", 0, 1, 1, stepTotalAll)
 	res := db.BuildKnownCaches(cfg)
-	report(progress, "扫描已知缓存", 1, 1, 1, 3)
+	report(progress, "扫描已知缓存", 1, 1, 1, stepTotalAll)
 	return res
 }
 
 // AutoDiscover 通过关键词自动发现常见缓存目录（npm/pip/maven/gradle/jetbrains 等非 Electron 类）。
+// 扫描根：AppData 三目录 + ProgramData（系统级厂商缓存）+ 用户根隐藏目录。
 func AutoDiscover(cfg *config.Config, progress ProgressFunc) []model.CacheEntry {
 	keywords := []string{"cache", "tmp", "temp", "logs", "log", "downloads"}
 
 	roots := []string{}
-	for _, b := range []config.Base{config.BaseLocal, config.BaseRoaming, config.BaseLocalLow} {
+	for _, b := range []config.Base{config.BaseLocal, config.BaseRoaming, config.BaseLocalLow, config.BaseProgramData} {
 		if r := cfg.Resolve(b); r != "" {
 			roots = append(roots, r)
 		}
@@ -54,10 +58,10 @@ func AutoDiscover(cfg *config.Config, progress ProgressFunc) []model.CacheEntry 
 	var out []model.CacheEntry
 	seen := map[string]bool{}
 	maxDepth := 2
-	report(progress, "自动发现缓存目录", 0, len(roots), 2, 3)
+	report(progress, "自动发现缓存目录", 0, len(roots), 2, stepTotalAll)
 	for i, root := range roots {
 		discoverFrom(root, 0, maxDepth, keywords, cfg, seen, &out)
-		report(progress, "自动发现缓存目录", i+1, len(roots), 2, 3)
+		report(progress, "自动发现缓存目录", i+1, len(roots), 2, stepTotalAll)
 	}
 	return out
 }
@@ -89,7 +93,7 @@ func discoverFrom(root string, depth, maxDepth int, keywords []string, cfg *conf
 				break
 			}
 		}
-		if hit && !seen[full] && !isExcluded(cfg, full) {
+		if hit && !seen[full] && !cfg.IsExcluded(full) {
 			seen[full] = true
 			size, fc, la := db.ScanDir(full)
 			if size > 0 {
@@ -110,19 +114,26 @@ func discoverFrom(root string, depth, maxDepth int, keywords []string, cfg *conf
 }
 
 // FindElectronCaches 通用结构识别：不认工具名，只认 Electron/Chromium 标准缓存目录结构。
-// 遍历 AppData 三目录 + 用户根隐藏目录，命中标准缓存名即判定为可清理缓存簇。
+// 遍历 AppData 三目录 + ProgramData + 用户根隐藏目录，命中标准缓存名即判定为可清理缓存簇。
 func FindElectronCaches(cfg *config.Config, progress ProgressFunc) []model.CacheEntry {
 	var out []model.CacheEntry
 	seen := map[string]bool{}
 
 	// 收集所有待扫描根及其递归深度，便于按根回传进度
-	type rootDepth struct{ path string; depth int }
+	type rootDepth struct {
+		path  string
+		depth int
+	}
 	roots := []rootDepth{}
 	// AppData 体系：深度 3（足以覆盖 App\UserData\Cache 这类嵌套）
 	for _, b := range []config.Base{config.BaseLocal, config.BaseRoaming, config.BaseLocalLow} {
 		if r := cfg.Resolve(b); r != "" {
 			roots = append(roots, rootDepth{r, 3})
 		}
+	}
+	// ProgramData（系统级 Electron 应用缓存，如全局安装的套壳应用）：深度 2
+	if r := cfg.Resolve(config.BaseProgramData); r != "" {
+		roots = append(roots, rootDepth{r, 2})
 	}
 	// 用户根隐藏目录（.workbuddy/.trae-cn/.claude 等）：深度 5，覆盖更深缓存
 	if entries, err := os.ReadDir(cfg.Home); err == nil {
@@ -133,10 +144,10 @@ func FindElectronCaches(cfg *config.Config, progress ProgressFunc) []model.Cache
 		}
 	}
 
-	report(progress, "通用识别 Electron 缓存", 0, len(roots), 3, 3)
+	report(progress, "通用识别 Electron 缓存", 0, len(roots), 3, stepTotalAll)
 	for i, rd := range roots {
 		collectElectron(rd.path, 0, rd.depth, cfg, seen, &out)
-		report(progress, "通用识别 Electron 缓存", i+1, len(roots), 3, 3)
+		report(progress, "通用识别 Electron 缓存", i+1, len(roots), 3, stepTotalAll)
 	}
 	return out
 }
@@ -162,7 +173,7 @@ func collectElectron(root string, depth, maxDepth int, cfg *config.Config, seen 
 			continue
 		}
 		if db.IsElectronSafe(name) {
-			if !seen[full] && !isExcluded(cfg, full) {
+			if !seen[full] && !cfg.IsExcluded(full) {
 				seen[full] = true
 				size, fc, la := db.ScanDir(full)
 				if size > 0 {
@@ -184,6 +195,7 @@ func collectElectron(root string, depth, maxDepth int, cfg *config.Config, seen 
 	}
 }
 
+// appName 从缓存项路径中提取"所属应用名"。
 func appName(cfg *config.Config, full string) string {
 	rel := db.ShortOf(cfg, full)
 	parts := strings.Split(rel, string(os.PathSeparator))
@@ -194,15 +206,6 @@ func appName(cfg *config.Config, full string) string {
 		return parts[0]
 	}
 	return "未知"
-}
-
-func isExcluded(cfg *config.Config, full string) bool {
-	for _, ex := range cfg.ExcludeDirs {
-		if ex != "" && strings.Contains(full, ex) {
-			return true
-		}
-	}
-	return false
 }
 
 // ── 合并入口 ──
@@ -238,11 +241,39 @@ func isAIFocus(name string) bool {
 	return false
 }
 
-// DeepAIScan 深度 AI 扫描：聚焦 AI/IDE 类缓存，合并已知 + 自动发现 + 通用识别。
+// FindCustomCaches 扫描用户自定义目录：目录本身作为缓存项整体纳入（存在且未被排除才返回）。
+func FindCustomCaches(cfg *config.Config, progress ProgressFunc) []model.CacheEntry {
+	report(progress, "扫描自定义目录", 0, len(cfg.CustomDirs), 4, stepTotalAll)
+	var out []model.CacheEntry
+	for i, dir := range cfg.CustomDirs {
+		if dir == "" {
+			continue
+		}
+		full := filepath.Clean(dir)
+		if fi, err := os.Stat(full); err == nil && fi.IsDir() && !cfg.IsExcluded(full) {
+			size, fc, la := db.ScanDir(full)
+			out = append(out, model.CacheEntry{
+				Path:       full,
+				ShortPath:  db.ShortOf(cfg, full),
+				Category:   "自定义目录",
+				Risk:       model.RiskCaution,
+				Desc:       "用户指定的缓存目录",
+				Size:       size,
+				FileCount:  fc,
+				LastAccess: la,
+			})
+		}
+		report(progress, "扫描自定义目录", i+1, len(cfg.CustomDirs), 4, stepTotalAll)
+	}
+	return out
+}
+
+// DeepAIScan 深度 AI 扫描：聚焦 AI/IDE 类缓存，合并已知 + 自动发现 + 通用识别 + 自定义目录。
 func DeepAIScan(cfg *config.Config, progress ProgressFunc) []model.CacheEntry {
 	known := FindKnownCaches(cfg, progress)
 	discovered := AutoDiscover(cfg, progress)
 	electron := FindElectronCaches(cfg, progress)
+	custom := FindCustomCaches(cfg, progress)
 
 	var pool []model.CacheEntry
 	for _, e := range known {
@@ -260,15 +291,19 @@ func DeepAIScan(cfg *config.Config, progress ProgressFunc) []model.CacheEntry {
 			pool = append(pool, e)
 		}
 	}
+	// 用户显式添加的自定义目录始终纳入
+	pool = append(pool, custom...)
 	return dedupe(pool)
 }
 
-// SmartScan 一键扫描：合并所有已知 + 自动发现 + 通用识别（含浏览器/IM/网盘等）。
+// SmartScan 一键扫描：合并所有已知 + 自动发现 + 通用识别 + 自定义目录（含浏览器/IM/网盘等）。
 func SmartScan(cfg *config.Config, progress ProgressFunc) []model.CacheEntry {
 	known := FindKnownCaches(cfg, progress)
 	discovered := AutoDiscover(cfg, progress)
 	electron := FindElectronCaches(cfg, progress)
+	custom := FindCustomCaches(cfg, progress)
 	pool := append(append(known, discovered...), electron...)
+	pool = append(pool, custom...)
 	return dedupe(pool)
 }
 
@@ -293,7 +328,7 @@ func dedupe(entries []model.CacheEntry) []model.CacheEntry {
 }
 
 // dedupeParents 移除被其他缓存项完整包含的子孙目录，避免父子目录重复计数。
-// 例如 Electron 的 X\Cache（递归大小已含其全部内容）与其子目录 X\Cache\Cache_Data
+// 例如 Electron 的 X\Cache（递归大小已含其全部内容）与其子目录 X\Cache\Cache_data
 // 大小相同却都被列出；仅保留更靠上的祖先即可，既避免合计虚高，也避免清理父目录时
 // 子目录被重复计入。按路径长度升序处理，优先保留祖先。
 func dedupeParents(entries []model.CacheEntry) []model.CacheEntry {

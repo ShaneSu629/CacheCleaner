@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"runtime"
 	"strconv"
 
 	"cachecleaner/internal/clean"
 	"cachecleaner/internal/config"
 	"cachecleaner/internal/model"
+	"cachecleaner/internal/regclean"
 	"cachecleaner/internal/scan"
 	"cachecleaner/internal/ui"
 )
@@ -31,6 +33,8 @@ func main() {
 			manageCustom(cfg)
 		case 4:
 			showHistory(cfg)
+		case 5:
+			runRegistry()
 		case 0:
 			fmt.Println("再见。")
 			return
@@ -49,11 +53,59 @@ func runClean(cfg *config.Config, entries []model.CacheEntry) {
 	if !ok {
 		return
 	}
-	freed, count, failed := clean.Clean(chosen, cfg)
+	freed, count, _, failed := clean.Clean(chosen, cfg)
 	fmt.Println()
 	fmt.Printf("已清理 %d 项, 释放 %s\n", count, ui.FormatSize(freed))
 	for _, f := range failed {
 		fmt.Println("  失败:", f)
+	}
+}
+
+// runRegistry 注册表垃圾清理（仅 Windows 支持）。
+func runRegistry() {
+	if runtime.GOOS != "windows" {
+		fmt.Println("注册表清理仅支持 Windows。")
+		return
+	}
+	fmt.Println("正在扫描注册表垃圾项...")
+	entries := regclean.Scan()
+	if len(entries) == 0 {
+		fmt.Println(ui.Head("未发现可清理的注册表垃圾项。"))
+		return
+	}
+	renderRegistry(entries)
+	chosen, ok := ui.SelectRegistry(entries)
+	if !ok {
+		return
+	}
+	keys := make([]string, 0, len(chosen))
+	for _, e := range chosen {
+		keys = append(keys, e.Key)
+	}
+	cleaned, failed := regclean.Clean(keys)
+	var freed int64
+	for _, e := range cleaned {
+		freed += e.Size
+	}
+	fmt.Printf("\n已清理 %d 个注册表项, 释放约 %s\n", len(cleaned), ui.FormatSize(freed))
+	for _, f := range failed {
+		fmt.Println("  失败:", f)
+	}
+	if len(cleaned) > 0 {
+		fmt.Println("提示：部分历史设置在资源管理器重启后生效。")
+	}
+}
+
+func renderRegistry(entries []regclean.Entry) {
+	var total int64
+	for _, e := range entries {
+		total += e.Size
+	}
+	fmt.Println()
+	fmt.Println(ui.Head(fmt.Sprintf("共 %d 项注册表明细, 约 %s", len(entries), ui.FormatSize(total))))
+	for i, e := range entries {
+		fmt.Printf("  %d. [%s] %s (%d 个值, %s)\n",
+			i+1, e.Risk.Label(), e.Desc, e.Values, ui.FormatSize(e.Size))
 	}
 }
 
