@@ -3,6 +3,7 @@ package db
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"cachecleaner/internal/config"
 	"cachecleaner/internal/model"
@@ -12,7 +13,7 @@ import (
 type knownDef struct {
 	applyOS  string // "windows" | "darwin" | "linux" | "all"
 	base     config.Base
-	rel      string
+	rel      string // 相对路径，允许 "*" 段匹配该层任意单个目录（如 profiles/*/Cache）
 	category string
 	risk     model.Risk
 	desc     string
@@ -34,23 +35,65 @@ func BuildKnownCaches(cfg *config.Config) []model.CacheEntry {
 		if root == "" {
 			continue
 		}
-		full := filepath.Join(root, filepath.FromSlash(d.rel))
-		if _, err := os.Stat(full); err != nil {
-			continue
+		for _, full := range expandPath(root, d.rel) {
+			if cfg.IsExcluded(full) {
+				continue
+			}
+			size, fc, la := ScanDir(full)
+			if size <= 0 {
+				continue
+			}
+			out = append(out, model.CacheEntry{
+				Path:       full,
+				ShortPath:  ShortOf(cfg, full),
+				Category:   d.category,
+				Risk:       d.risk,
+				Desc:       d.desc,
+				Size:       size,
+				FileCount:  fc,
+				LastAccess: la,
+			})
 		}
-		size, fc, la := ScanDir(full)
-		out = append(out, model.CacheEntry{
-			Path:       full,
-			ShortPath:  ShortOf(cfg, full),
-			Category:   d.category,
-			Risk:       d.risk,
-			Desc:       d.desc,
-			Size:       size,
-			FileCount:  fc,
-			LastAccess: la,
-		})
 	}
 	return out
+}
+
+// expandPath 将含 "*" 段的相对路径展开为真实存在的目录列表。
+// "*" 只匹配一个路径段（不递归、不跨层），避免误伤深层目录。
+func expandPath(root, rel string) []string {
+	segs := strings.Split(filepath.ToSlash(rel), "/")
+	cur := []string{root}
+	for _, seg := range segs {
+		if seg == "" || seg == "." {
+			continue
+		}
+		var next []string
+		if seg == "*" {
+			for _, base := range cur {
+				entries, err := os.ReadDir(base)
+				if err != nil {
+					continue
+				}
+				for _, e := range entries {
+					if e.IsDir() {
+						next = append(next, filepath.Join(base, e.Name()))
+					}
+				}
+			}
+		} else {
+			for _, base := range cur {
+				p := filepath.Join(base, filepath.FromSlash(seg))
+				if fi, err := os.Stat(p); err == nil && fi.IsDir() {
+					next = append(next, p)
+				}
+			}
+		}
+		cur = next
+		if len(cur) == 0 {
+			return nil
+		}
+	}
+	return cur
 }
 
 // ── Windows 专有（AppData 体系） ──
@@ -131,9 +174,38 @@ func knownWindows() []knownDef {
 		// ── 系统软件升级缓存（本机取证：微信 4.x 升级缓存可达 GB 级，此前全部漏扫）──
 		// 腾讯系升级缓存
 		{"windows", config.BaseRoaming, "Tencent/xwechat/update", "升级缓存", model.RiskSafe, "微信 4.x 升级下载缓存(清后升级包重新下载)"},
-		{"windows", config.BaseRoaming, "Tencent/WXWork/Update", "升级缓存", model.RiskSafe, "企业微信升级缓存"},
+		// 注意：企业微信升级目录实测叫 upgrade（不是 Update），写错名字会永远匹配不到（本机实测 2.0GB）
+		{"windows", config.BaseRoaming, "Tencent/WXWork/upgrade", "升级缓存", model.RiskSafe, "企业微信升级暂存包(本机实测2.0GB,清后升级包重新下载)"},
+		{"windows", config.BaseRoaming, "Tencent/WXWork/patch", "升级缓存", model.RiskSafe, "企业微信热更新补丁包缓存"},
 		{"windows", config.BaseRoaming, "Tencent/WeMail/downloading", "升级缓存", model.RiskCaution, "QQ邮箱下载缓存(清理中邮件需重新下载)"},
 		{"windows", config.BaseRoaming, "Tencent/WeChat/XPlugin", "升级缓存", model.RiskCaution, "微信 3.x 插件/升级缓存"},
+
+		// ── 社交应用缓存（本机取证：xwechat 1.8G / WXWork 3.2G 此前几乎全部漏扫）──
+		// 微信 4.x（xwechat）：日志/崩溃信息
+		{"windows", config.BaseRoaming, "Tencent/xwechat/log", "社交缓存(微信)", model.RiskSafe, "微信 4.x 运行日志(xlog)"},
+		{"windows", config.BaseRoaming, "Tencent/xwechat/crashinfo", "社交缓存(微信)", model.RiskSafe, "微信 4.x 崩溃信息"},
+		// 微信 4.x Radium 小程序网页运行时：纯缓存子目录（profiles 下是标准 Chromium 缓存簇）
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/cache", "社交缓存(微信)", model.RiskSafe, "微信 4.x 小程序运行时缓存"},
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/crashpad", "社交缓存(微信)", model.RiskSafe, "微信 4.x 崩溃报告缓存"},
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/web/profiles_to_delete", "社交缓存(微信)", model.RiskSafe, "微信 4.x 待删除网页档案"},
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/web/profiles/*/Cache", "社交缓存(微信)", model.RiskSafe, "微信 4.x 小程序网页缓存"},
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/web/profiles/*/Code Cache", "社交缓存(微信)", model.RiskSafe, "微信 4.x 小程序代码缓存"},
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/web/profiles/*/GPUCache", "社交缓存(微信)", model.RiskSafe, "微信 4.x 小程序 GPU 缓存"},
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/web/profiles/*/DawnGraphiteCache", "社交缓存(微信)", model.RiskSafe, "微信 4.x 图形缓存"},
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/web/profiles/*/DawnWebGPUCache", "社交缓存(微信)", model.RiskSafe, "微信 4.x WebGPU 缓存"},
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/web/profiles/*/blob_storage", "社交缓存(微信)", model.RiskSafe, "微信 4.x 小程序 blob 存储"},
+		// 微信 4.x 小程序用户级缓存（users/<hash>/ 下，只取明确的缓存子目录，不碰 mmkv/applet data 等会话数据）
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/users/*/applet/codecache", "社交缓存(微信)", model.RiskSafe, "微信小程序代码缓存(重新打开自动重建)"},
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/users/*/applet/publicLib", "社交缓存(微信)", model.RiskSafe, "微信小程序公共库(按需重新下载)"},
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/users/*/xworker/mpxworker", "社交缓存(微信)", model.RiskCaution, "微信小程序工作线程缓存(删除后按需重建,不影响聊天记录)"},
+		{"windows", config.BaseRoaming, "Tencent/xwechat/radium/users/*/xworker/liteapp", "社交缓存(微信)", model.RiskCaution, "微信轻应用缓存(删除后按需重建)"},
+		// 微信 4.x 插件组件（RadiumWMPF 框架/播放器/OCR 等，本机实测 637M）
+		{"windows", config.BaseRoaming, "Tencent/xwechat/XPlugin/Plugins", "社交缓存(微信)", model.RiskCaution, "微信 4.x 插件组件(删除后按需重新下载,不影响聊天记录)"},
+		// 微信 3.x / 共享（部分版本 4.x 也写 Roaming\Tencent\WeChat）
+		{"windows", config.BaseRoaming, "Tencent/WeChat/log", "社交缓存(微信)", model.RiskSafe, "微信运行日志"},
+		{"windows", config.BaseRoaming, "Tencent/WeChat/crash", "社交缓存(微信)", model.RiskSafe, "微信崩溃日志"},
+		// 企业微信：日志与临时转换产物（cef/wmpf_Applet/WeChatOCR/WXDrive_x64 等是组件运行时，勿动）
+		{"windows", config.BaseRoaming, "Tencent/WXWork/Log", "社交缓存(企业微信)", model.RiskSafe, "企业微信运行日志"},
 		// Electron/Squirrel 安装器升级临时目录
 		{"windows", config.BaseLocal, "SquirrelTemp", "升级缓存", model.RiskSafe, "Electron 应用安装器升级临时目录"},
 		// 系统级升级缓存（ProgramData / Windows 目录，部分需管理员权限，删除失败会列入失败项）

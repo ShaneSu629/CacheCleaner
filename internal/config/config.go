@@ -18,6 +18,7 @@ const (
 	BaseLocalLow         // Win %AppData%\LocalLow（仅 Windows 有效）
 	BaseProgramData      // Win C:\ProgramData（全系统共享应用数据，仅 Windows 有效）
 	BaseWindows          // Win 系统目录（如 C:\Windows，仅 Windows 有效）
+	BaseDocuments        // 文档目录（社交应用数据重灾区：WeChat Files/xwechat_files/Tencent Files）
 )
 
 // Config 保存运行期配置与各系统基路径。
@@ -28,6 +29,7 @@ type Config struct {
 	LocalLow    string
 	ProgramData string
 	Windows     string
+	Documents   string
 	OS          string
 
 	ExcludeDirs []string
@@ -62,6 +64,18 @@ func Load() (*Config, error) {
 			cfg.Windows = w
 		} else if w := os.Getenv("windir"); w != "" {
 			cfg.Windows = w
+		}
+	}
+	// 文档目录：公司环境常重定向到 OneDrive，逐个候选探测，取第一个真实存在的。
+	for _, cand := range []string{
+		filepath.Join(home, "Documents"),
+		filepath.Join(home, "OneDrive", "Documents"),
+		filepath.Join(home, "OneDrive", "文档"),
+		filepath.Join(home, "文档"),
+	} {
+		if fi, err := os.Stat(cand); err == nil && fi.IsDir() {
+			cfg.Documents = cand
+			break
 		}
 	}
 	if conf != "" {
@@ -122,6 +136,8 @@ func (c *Config) Resolve(base Base) string {
 		return c.ProgramData
 	case BaseWindows:
 		return c.Windows
+	case BaseDocuments:
+		return c.Documents
 	}
 	return c.Home
 }
