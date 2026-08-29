@@ -10,6 +10,7 @@
 package dismclean
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -33,6 +34,15 @@ type Status struct {
 	Done    bool    // 作业已结束
 	OK      bool    // 结束时的成败（Done 为 true 时有意义）
 	Message string  // 结束后的汇总信息 / 出错原因
+}
+
+// buildJobCommand 构造提权作业命令：执行 dism 并把输出重定向到 outFile，
+// 结束后向 doneFile 写入 "0"（成功）或 "1"（失败）。
+// 关键细节：echo 的数字与 > 之间必须有空格——"echo 0>file" 中 0> 会被 cmd
+// 解析成重定向句柄 0（而不是输出文本 0），done 文件内容变成垃圾导致误判失败。
+func buildJobCommand(dismArgs, outFile, doneFile string) string {
+	return fmt.Sprintf(`dism %s >"%s" 2>&1 && (echo 0 > "%s") || (echo 1 > "%s")`,
+		dismArgs, outFile, doneFile, doneFile)
 }
 
 // pctRe 匹配 DISM 进度行中的百分比，如 [======                    20.0%      ]

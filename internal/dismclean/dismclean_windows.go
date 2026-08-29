@@ -103,8 +103,9 @@ func start(kind string) error {
 	// 输出重定向到文件（供进度轮询），结束后写 done 标志。
 	// 用 && / || 而不是 %ERRORLEVEL%，避免依赖延迟展开；命令行整体经 Unicode
 	// 传递（不写 .bat，规避中文用户名路径在 ANSI .bat 中乱码的问题）。
-	inner := fmt.Sprintf(`dism %s >"%s" 2>&1 && (echo 0>"%s") || (echo 1>"%s")`,
-		dismArgs, j.outFile, j.doneFile, j.doneFile)
+	// 注意：echo 的数字与 > 之间必须有空格——"echo 0>file" 中 0> 会被 cmd
+	// 解析成重定向句柄 0（而不是输出文本 0），done 文件内容变成垃圾导致误判失败。
+	inner := buildJobCommand(dismArgs, j.outFile, j.doneFile)
 
 	var runErr error
 	if IsElevated() {

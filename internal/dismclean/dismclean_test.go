@@ -137,3 +137,19 @@ func TestValueAfterColon(t *testing.T) {
 		t.Errorf("中文冒号取值错误: %q", got)
 	}
 }
+
+// TestBuildJobCommand 回归测试：echo 数字与 > 之间必须有空格。
+// 历史 bug："echo 0>file" 中 0> 被 cmd 解析成重定向句柄 0，done 文件
+// 内容变成垃圾，DISM 成功却被误判为失败。
+func TestBuildJobCommand(t *testing.T) {
+	cmd := buildJobCommand("/Online /Cleanup-Image /AnalyzeComponentStore", `C:\t\out.txt`, `C:\t\done.txt`)
+	if strings.Contains(cmd, "echo 0>") || strings.Contains(cmd, "echo 1>") {
+		t.Errorf("echo 与 > 之间缺少空格会被 cmd 解析成句柄重定向: %s", cmd)
+	}
+	if !strings.Contains(cmd, `echo 0 > "C:\t\done.txt"`) || !strings.Contains(cmd, `echo 1 > "C:\t\done.txt"`) {
+		t.Errorf("done 标志命令不正确: %s", cmd)
+	}
+	if !strings.Contains(cmd, `>"C:\t\out.txt" 2>&1`) {
+		t.Errorf("输出重定向不正确: %s", cmd)
+	}
+}
