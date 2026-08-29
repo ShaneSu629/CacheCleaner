@@ -23,6 +23,10 @@ build/bin/
 CacheCleaner/config.json
 CacheCleaner/history.json
 
+# 运行期落盘日志（在 exe 同目录生成）
+CacheCleaner.log
+CacheCleaner.old.log
+
 # 临时文件
 *.tmp
 *.zip

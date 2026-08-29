@@ -16,6 +16,8 @@ import (
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/text/encoding/simplifiedchinese"
+
+	"cachecleaner/internal/applog"
 )
 
 // job 是一次提权作业的运行态：dism 输出写入 outFile，结束后写 doneFile（内容 "0"/"1"）。
@@ -70,6 +72,7 @@ func StartCleanup() error { return start("cleanup") }
 // start 启动一次提权作业。同一时刻只允许一个作业。
 func start(kind string) error {
 	if !Available() {
+		applog.Error("DISM: 未找到 dism.exe（可能被安全策略禁用）")
 		return errors.New("未找到 dism.exe（可能被安全策略禁用）")
 	}
 	mu.Lock()
@@ -106,6 +109,7 @@ func start(kind string) error {
 	var runErr error
 	if IsElevated() {
 		// 已是管理员：直接执行，无需再弹 UAC。
+		applog.Info("DISM: 已是管理员，直接执行 %s (输出: %s)", kind, j.outFile)
 		c := exec.Command("cmd.exe", "/c", inner)
 		c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000} // CREATE_NO_WINDOW
 		runErr = c.Start()
@@ -113,13 +117,17 @@ func start(kind string) error {
 			go c.Wait()
 		}
 	} else {
+		applog.Info("DISM: 非管理员，ShellExecute runas 提权启动 %s（等待 UAC 授权）", kind)
 		runErr = shellExecuteRunAs("cmd.exe", "/c "+inner)
 	}
 	if runErr != nil {
+		applog.Error("DISM: %s 启动失败: %v", kind, runErr)
 		mu.Lock()
 		current = nil
 		mu.Unlock()
 		os.RemoveAll(dir)
+	} else {
+		applog.Info("DISM: %s 作业已启动", kind)
 	}
 	return runErr
 }

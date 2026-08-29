@@ -33,6 +33,23 @@ async function call(method, ...args) {
   return await window.go.main.App[method](...args);
 }
 
+/* ── 前端错误上报：JS 异常统一落盘到 exe 旁的 CacheCleaner.log ──────── */
+// Wails 运行时注入前 window.go 可能不存在，等可用后再挂接，避免错误丢失。
+function reportFrontend(msg) {
+  try {
+    if (window.go && window.go.main && window.go.main.App) {
+      window.go.main.App.LogFrontend(String(msg).slice(0, 500));
+    }
+  } catch (e) { /* 上报失败不影响页面 */ }
+}
+window.addEventListener('error', (ev) => {
+  reportFrontend((ev.message || 'unknown') + ' @ ' + (ev.filename || '') + ':' + (ev.lineno || 0));
+});
+window.addEventListener('unhandledrejection', (ev) => {
+  const r = ev.reason;
+  reportFrontend('unhandledrejection: ' + ((r && r.message) || r || 'unknown'));
+});
+
 /* ── 主题（浅色 / 深色，跟随系统 + 手动覆盖 + 本地记忆） ────────────── */
 
 const THEME_KEY = 'cachecleaner.theme';

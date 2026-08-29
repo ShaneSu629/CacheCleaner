@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"cachecleaner/internal/applog"
 	"cachecleaner/internal/clean"
 	"cachecleaner/internal/config"
 	"cachecleaner/internal/dismclean"
@@ -102,6 +103,7 @@ func (a *App) startup(ctx context.Context) {
 	if err != nil {
 		// 配置加载失败也要保证 cfg 非 nil，否则后续所有绑定方法都会空指针 panic。
 		runtime.LogError(a.ctx, "配置加载失败，已回退默认配置: "+err.Error())
+		applog.Error("配置加载失败，已回退默认配置: %v", err)
 		cfg = config.Default()
 	}
 	a.mu.Lock()
@@ -109,6 +111,8 @@ func (a *App) startup(ctx context.Context) {
 	a.lastEntries = map[string]model.CacheEntry{}
 	a.lastRegEntries = map[string]regclean.Entry{}
 	a.mu.Unlock()
+	applog.Info("启动完成: OS=%s Home=%s Documents=%s Windows=%s",
+		cfg.OS, cfg.Home, cfg.Documents, cfg.Windows)
 }
 
 func (a *App) domReady(ctx context.Context) {}
@@ -160,12 +164,14 @@ func (a *App) Scan(mode string) {
 	cfg := a.cfg
 	a.mu.Unlock()
 
+	applog.Info("扫描开始: mode=%s", mode)
 	go func() {
 		defer func() {
 			a.mu.Lock()
 			a.scanning = false
 			a.mu.Unlock()
 		}()
+		start := time.Now()
 
 		progress := func(phase string, done, total, step, stepTotal int) {
 			var pct float64
@@ -192,6 +198,11 @@ func (a *App) Scan(mode string) {
 			entries = scan.SmartScan(cfg, progress)
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].Size > entries[j].Size })
+		var totalSize int64
+		for _, e := range entries {
+			totalSize += e.Size
+		}
+		applog.Info("扫描完成: mode=%s 共 %d 项 / %d 字节, 耗时 %s", mode, len(entries), totalSize, time.Since(start).Round(time.Second))
 
 		dtos := make([]EntryDTO, 0, len(entries))
 		for _, e := range entries {
@@ -249,7 +260,12 @@ func (a *App) CleanSelected(paths []string) CleanResult {
 		})
 	}
 	emitCleanProgress(clean.Progress{Total: len(chosen), Path: "准备清理…"})
+	applog.Info("清理开始: %d 项", len(chosen))
 	freed, count, cleaned, failed := clean.Clean(chosen, cfg, emitCleanProgress)
+	applog.Info("清理结束: 成功 %d 项 / 释放 %d 字节, 失败 %d 项", count, freed, len(failed))
+	for _, f := range failed {
+		applog.Error("清理失败: %s", f)
+	}
 	result := CleanResult{Freed: freed, Count: count}
 	cleanedSet := make(map[string]bool, len(cleaned))
 	for _, e := range cleaned {
@@ -448,7 +464,9 @@ func toDismReportDTO(r *dismclean.Report) *DismReportDTO {
 // AnalyzeComponentStore 启动组件存储分析（非管理员进程会弹 UAC 授权框）。
 // 返回空串表示已启动（进度经 dism:progress 事件推送），否则为错误信息。
 func (a *App) AnalyzeComponentStore() string {
+	applog.Info("DISM: 请求启动组件存储分析 (elevated=%v)", dismclean.IsElevated())
 	if err := dismclean.StartAnalyze(); err != nil {
+		applog.Error("DISM: 分析启动失败: %v", err)
 		return err.Error()
 	}
 	a.watchDismJob("analyze")
@@ -458,11 +476,19 @@ func (a *App) AnalyzeComponentStore() string {
 // StartComponentCleanup 启动组件存储清理（不带 /ResetBase，清理后仍可卸载已装更新）。
 // 返回空串表示已启动（进度经 dism:progress 事件推送），否则为错误信息。
 func (a *App) StartComponentCleanup() string {
+	applog.Info("DISM: 请求启动组件存储清理 (elevated=%v)", dismclean.IsElevated())
 	if err := dismclean.StartCleanup(); err != nil {
+		applog.Error("DISM: 清理启动失败: %v", err)
 		return err.Error()
 	}
 	a.watchDismJob("cleanup")
 	return ""
+}
+
+// LogFrontend 接收前端 JS 错误（window.onerror / unhandledrejection）并落盘，
+// 前端报错从此不再不可见。
+func (a *App) LogFrontend(msg string) {
+	applog.Error("前端: %s", msg)
 }
 
 // watchDismJob 后台轮询提权作业进度并广播 dism:progress 事件，结束时附带分析报告。
@@ -485,6 +511,11 @@ func (a *App) watchDismJob(kind string) {
 			if st.Done {
 				if kind == "analyze" && st.OK {
 					payload["report"] = toDismReportDTO(dismclean.AnalyzeReport())
+				}
+				if st.OK {
+					applog.Info("DISM: %s 作业完成", kind)
+				} else {
+					applog.Error("DISM: %s 作业失败: %s", kind, st.Message)
 				}
 				a.emit("dism:progress", payload)
 				return
