@@ -66,7 +66,8 @@ func Init() string {
 		return ""
 	}
 	lg = log.New(file, "", 0)
-	write("==== 启动 %s ====", time.Now().Format("2006-01-02 15:04:05"))
+	// 注意：Init 已持有 mu，这里必须直接写（调 write() 会重入死锁）。
+	lg.Printf("%s ==== 启动 %s ====", time.Now().Format(timeLayout), time.Now().Format("2006-01-02 15:04:05"))
 	return path
 }
 
