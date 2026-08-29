@@ -215,6 +215,19 @@ func knownWindows() []knownDef {
 		{"windows", config.BaseWindows, "SoftwareDistribution/Download", "升级缓存", model.RiskReview, "Windows 更新下载缓存(需管理员权限)"},
 		{"windows", config.BaseWindows, "ServiceProfiles/NetworkService/AppData/Local/Microsoft/Windows/DeliveryOptimization/Cache", "升级缓存", model.RiskReview, "Windows 传递优化缓存(需管理员权限)"},
 		{"windows", config.BaseWindows, "Temp", "系统缓存", model.RiskCaution, "系统级临时目录(需管理员权限)"},
+
+		// ── 系统空间回收（对齐 Dism++「空间回收」的文件级项目）──
+		// 注：C:\Windows 下的目录需要管理员权限才能删除，权限不足时列入失败项，属预期行为。
+		{"windows", config.BaseWindows, "Logs/CBS", "系统空间回收", model.RiskSafe, "组件服务 CBS 日志(可膨胀至 GB 级,需管理员权限)"},
+		{"windows", config.BaseWindows, "Logs/DISM", "系统空间回收", model.RiskSafe, "DISM 日志(需管理员权限)"},
+		{"windows", config.BaseWindows, "Minidump", "系统空间回收", model.RiskSafe, "蓝屏小型内存转储(需管理员权限)"},
+		{"windows", config.BaseWindows, "LiveKernelReports", "系统空间回收", model.RiskSafe, "内核实时报告转储(需管理员权限)"},
+		{"windows", config.BaseWindows, "Prefetch", "系统空间回收", model.RiskCaution, "启动预取文件(删除后短暂影响启动加速,自动重建,需管理员权限)"},
+		{"windows", config.BaseProgramData, "Microsoft/Windows/WER", "系统空间回收", model.RiskSafe, "Windows 错误报告(系统级)"},
+		{"windows", config.BaseLocal, "Microsoft/Windows/WER", "系统空间回收", model.RiskSafe, "Windows 错误报告(用户级)"},
+		{"windows", config.BaseLocal, "D3DSCache", "系统空间回收", model.RiskSafe, "DirectX 着色器缓存(游戏/图形程序自动重建)"},
+		{"windows", config.BaseSystemDrive, "$RECYCLE.BIN", "系统空间回收", model.RiskCaution, "回收站(删除后无法找回其中文件,系统盘)"},
+		{"windows", config.BaseSystemDrive, "Windows.old", "系统空间回收", model.RiskReview, "旧系统备份(删除后无法回退到升级前的 Windows)"},
 	}
 }
 

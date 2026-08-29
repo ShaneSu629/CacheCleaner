@@ -19,6 +19,7 @@ const (
 	BaseProgramData      // Win C:\ProgramData（全系统共享应用数据，仅 Windows 有效）
 	BaseWindows          // Win 系统目录（如 C:\Windows，仅 Windows 有效）
 	BaseDocuments        // 文档目录（社交应用数据重灾区：WeChat Files/xwechat_files/Tencent Files）
+	BaseSystemDrive      // Win 系统盘根（如 C:\，Windows.old / $RECYCLE.BIN 所在，仅 Windows 有效）
 )
 
 // Config 保存运行期配置与各系统基路径。
@@ -30,6 +31,7 @@ type Config struct {
 	ProgramData string
 	Windows     string
 	Documents   string
+	SystemDrive string
 	OS          string
 
 	ExcludeDirs []string
@@ -64,6 +66,11 @@ func Load() (*Config, error) {
 			cfg.Windows = w
 		} else if w := os.Getenv("windir"); w != "" {
 			cfg.Windows = w
+		}
+		// 系统盘根（C:\）：由 SystemRoot 推导（C:\Windows -> C:\），
+		// 用于 Windows.old / $RECYCLE.BIN 这类盘符根级条目。
+		if cfg.Windows != "" {
+			cfg.SystemDrive = filepath.VolumeName(cfg.Windows) + `\`
 		}
 	}
 	// 文档目录：公司环境常重定向到 OneDrive，逐个候选探测，取第一个真实存在的。
@@ -138,6 +145,8 @@ func (c *Config) Resolve(base Base) string {
 		return c.Windows
 	case BaseDocuments:
 		return c.Documents
+	case BaseSystemDrive:
+		return c.SystemDrive
 	}
 	return c.Home
 }
