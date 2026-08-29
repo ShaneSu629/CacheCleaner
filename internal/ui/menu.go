@@ -37,6 +37,7 @@ func ShowMainMenu() int {
 	fmt.Println("  [3] 自定义缓存目录管理")
 	fmt.Println("  [4] 查看清理历史")
 	fmt.Println("  [5] 注册表垃圾清理（仅 Windows）")
+	fmt.Println("  [6] 组件存储清理（WinSxS，需管理员授权）")
 	fmt.Println("  [0] 退出")
 	fmt.Println()
 

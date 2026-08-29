@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"runtime"
 	"strconv"
+	"strings"
+	"time"
 
 	"cachecleaner/internal/clean"
 	"cachecleaner/internal/config"
+	"cachecleaner/internal/dismclean"
 	"cachecleaner/internal/model"
 	"cachecleaner/internal/regclean"
 	"cachecleaner/internal/scan"
@@ -35,6 +38,8 @@ func main() {
 			showHistory(cfg)
 		case 5:
 			runRegistry()
+		case 6:
+			runDismClean()
 		case 0:
 			fmt.Println("再见。")
 			return
@@ -98,6 +103,88 @@ func runRegistry() {
 	}
 	if len(cleaned) > 0 {
 		fmt.Println("提示：部分历史设置在资源管理器重启后生效。")
+	}
+}
+
+// runDismClean 组件存储（WinSxS）分析与清理：需要管理员授权（非管理员进程会弹 UAC）。
+func runDismClean() {
+	if runtime.GOOS != "windows" {
+		fmt.Println("组件存储清理仅支持 Windows。")
+		return
+	}
+	if !dismclean.Available() {
+		fmt.Println("未找到 dism.exe（可能被安全策略禁用）。")
+		return
+	}
+	if !dismclean.IsElevated() {
+		fmt.Println(ui.Head("提示：当前不是管理员权限，接下来的操作会弹出 UAC 授权框，请点击「是」。"))
+	}
+
+	fmt.Println("  [1] 分析组件存储（查看可回收空间，约 1 分钟）")
+	fmt.Println("  [2] 执行组件清理（约 5-20 分钟，不使用 /ResetBase）")
+	fmt.Println("  [0] 返回")
+	choice := ui.Prompt("请选择操作: ")
+
+	var kind string
+	switch choice {
+	case "1":
+		kind = "analyze"
+		if err := dismclean.StartAnalyze(); err != nil {
+			fmt.Println("启动失败:", err)
+			return
+		}
+	case "2":
+		kind = "cleanup"
+		confirm := ui.Prompt("组件清理期间请勿关闭本窗口，确认执行? [y/N] ")
+		if !strings.EqualFold(strings.TrimSpace(confirm), "y") {
+			return
+		}
+		if err := dismclean.StartCleanup(); err != nil {
+			fmt.Println("启动失败:", err)
+			return
+		}
+	default:
+		return
+	}
+
+	// 轮询进度：单行刷新百分比，直到作业结束
+	for {
+		time.Sleep(800 * time.Millisecond)
+		st := dismclean.Poll()
+		if !st.Running && !st.Done {
+			continue
+		}
+		if st.Running {
+			fmt.Printf("\r  进行中 %.1f%%   ", st.Pct)
+			continue
+		}
+		fmt.Print("\r\033[K")
+		fmt.Println(st.Message)
+		if kind == "analyze" && st.OK {
+			if r := dismclean.AnalyzeReport(); r != nil {
+				fmt.Println()
+				fmt.Println(ui.Head("组件存储报告:"))
+				if r.ReportedSize != "" {
+					fmt.Println("  资源管理器报告大小:", r.ReportedSize)
+				}
+				if r.ActualSize != "" {
+					fmt.Println("  实际大小:", r.ActualSize)
+				}
+				if r.ReclaimablePkgs != "" {
+					fmt.Println("  可回收包数:", r.ReclaimablePkgs)
+				}
+				if r.LastCleanup != "" {
+					fmt.Println("  上次清理日期:", r.LastCleanup)
+				}
+				if r.Recommended {
+					fmt.Println("  清理建议: 建议执行组件清理")
+				}
+				if r.ReportedSize == "" && r.ActualSize == "" && r.Raw != "" {
+					fmt.Println(r.Raw)
+				}
+			}
+		}
+		return
 	}
 }
 

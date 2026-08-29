@@ -10,6 +10,7 @@ import (
 
 	"cachecleaner/internal/clean"
 	"cachecleaner/internal/config"
+	"cachecleaner/internal/dismclean"
 	"cachecleaner/internal/model"
 	"cachecleaner/internal/regclean"
 	"cachecleaner/internal/scan"
@@ -59,6 +60,23 @@ type RegEntryDTO struct {
 	Desc     string `json:"desc"`
 	Values   int    `json:"values"`
 	Size     int64  `json:"size"`
+}
+
+// DismReportDTO 是组件存储分析报告的可序列化结构。
+type DismReportDTO struct {
+	ReportedSize    string `json:"reportedSize"`
+	ActualSize      string `json:"actualSize"`
+	ReclaimablePkgs string `json:"reclaimablePkgs"`
+	LastCleanup     string `json:"lastCleanup"`
+	Recommended     bool   `json:"recommended"`
+	Raw             string `json:"raw"`
+}
+
+// DismInfoDTO 是「系统工具」页初始化信息：工具可用性 + 当前提权状态 + 最近报告。
+type DismInfoDTO struct {
+	Available bool           `json:"available"`
+	Elevated  bool           `json:"elevated"`
+	Report    *DismReportDTO `json:"report"`
 }
 
 // App 是绑定到前端（window.go.main.App）的结构，承载所有 UI 操作。
@@ -399,6 +417,81 @@ func (a *App) CleanRegistry(keys []string) CleanResult {
 
 	clean.AppendHistory(cfg, recs)
 	return result
+}
+
+// ── 组件存储清理（WinSxS / DISM，需提权）──
+
+// GetDismInfo 返回系统工具页初始化信息（可用性 / 提权状态 / 最近分析报告）。
+func (a *App) GetDismInfo() DismInfoDTO {
+	return DismInfoDTO{
+		Available: dismclean.Available(),
+		Elevated:  dismclean.IsElevated(),
+		Report:    toDismReportDTO(dismclean.AnalyzeReport()),
+	}
+
+}
+
+func toDismReportDTO(r *dismclean.Report) *DismReportDTO {
+	if r == nil {
+		return nil
+	}
+	return &DismReportDTO{
+		ReportedSize:    r.ReportedSize,
+		ActualSize:      r.ActualSize,
+		ReclaimablePkgs: r.ReclaimablePkgs,
+		LastCleanup:     r.LastCleanup,
+		Recommended:     r.Recommended,
+		Raw:             r.Raw,
+	}
+}
+
+// AnalyzeComponentStore 启动组件存储分析（非管理员进程会弹 UAC 授权框）。
+// 返回空串表示已启动（进度经 dism:progress 事件推送），否则为错误信息。
+func (a *App) AnalyzeComponentStore() string {
+	if err := dismclean.StartAnalyze(); err != nil {
+		return err.Error()
+	}
+	a.watchDismJob("analyze")
+	return ""
+}
+
+// StartComponentCleanup 启动组件存储清理（不带 /ResetBase，清理后仍可卸载已装更新）。
+// 返回空串表示已启动（进度经 dism:progress 事件推送），否则为错误信息。
+func (a *App) StartComponentCleanup() string {
+	if err := dismclean.StartCleanup(); err != nil {
+		return err.Error()
+	}
+	a.watchDismJob("cleanup")
+	return ""
+}
+
+// watchDismJob 后台轮询提权作业进度并广播 dism:progress 事件，结束时附带分析报告。
+func (a *App) watchDismJob(kind string) {
+	a.emit("dism:progress", map[string]interface{}{
+		"kind": kind, "running": true, "pct": float64(0), "line": "等待提权授权…", "done": false,
+	})
+	go func() {
+		ticker := time.NewTicker(700 * time.Millisecond)
+		defer ticker.Stop()
+		for range ticker.C {
+			st := dismclean.Poll()
+			if !st.Running && !st.Done {
+				continue // 作业刚启动，输出文件尚未产生
+			}
+			payload := map[string]interface{}{
+				"kind": kind, "running": st.Running, "pct": st.Pct, "line": st.Line,
+				"done": st.Done, "ok": st.OK, "message": st.Message,
+			}
+			if st.Done {
+				if kind == "analyze" && st.OK {
+					payload["report"] = toDismReportDTO(dismclean.AnalyzeReport())
+				}
+				a.emit("dism:progress", payload)
+				return
+			}
+			a.emit("dism:progress", payload)
+		}
+	}()
 }
 
 func appendUnique(s []string, v string) []string {

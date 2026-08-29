@@ -346,9 +346,102 @@ $('#btn-reg-clean').onclick = async () => {
   renderRegList();
 };
 
+/* ── 系统工具（组件存储清理，需 UAC 提权） ──────────────────────────── */
+
+let dismBusy = false; // DISM 任务进行中（分析/清理共用一把锁，后端也只允许单任务）
+
+async function refreshDismInfo() {
+  const info = await call('GetDismInfo');
+  if (!info) return;
+  if (!info.available) {
+    $('#dism-status').textContent = 'dism.exe 不可用（可能被安全策略禁用）';
+    $('#btn-dism-analyze').disabled = true;
+    $('#btn-dism-clean').disabled = true;
+    return;
+  }
+  renderDismReport(info.report);
+}
+
+function renderDismReport(r) {
+  const parsed = r && (r.actualSize || r.reportedSize || r.reclaimablePkgs);
+  show($('#dism-report'), !!parsed);
+  show($('#dism-raw'), !!(r && r.raw && !parsed));
+  if (r && r.raw) $('#dism-raw-text').textContent = r.raw;
+  toggleEmpty($('#empty-dism'), !parsed && !(r && r.raw));
+
+  if (parsed) {
+    $('#dism-reported').textContent = r.reportedSize || '—';
+    $('#dism-actual').textContent = r.actualSize || '—';
+    $('#dism-reclaimable').textContent = r.reclaimablePkgs || '0';
+    $('#dism-lastclean').textContent = r.lastCleanup || '从未';
+    $('#dism-recommended').textContent = r.recommended ? '建议清理' : '无需清理';
+    $('#dism-status').textContent = r.recommended
+      ? `建议清理 · 可回收 ${r.reclaimablePkgs || '?'} 个包`
+      : '状态良好';
+  } else if (r && r.raw) {
+    $('#dism-status').textContent = '分析完成（未能解析报告，显示原始输出）';
+  } else {
+    $('#dism-status').textContent = '尚未分析';
+  }
+}
+
+function setDismBusy(on, label) {
+  dismBusy = on;
+  $('#btn-dism-analyze').disabled = on;
+  $('#btn-dism-clean').disabled = on;
+  const bar = $('#dism-progress');
+  show(bar, on);
+  if (on) {
+    $('#dism-progress-text').textContent = label || '等待提权授权…';
+    $('#dism-progress-pct').textContent = '';
+    $('#dism-progress-fill').style.width = '0%';
+    $('#dism-progress-fill').classList.add('indeterminate');
+    $('#dism-progress-line').textContent = '';
+  }
+}
+
+$('#btn-dism-analyze').onclick = async () => {
+  if (dismBusy) { toast('已有组件存储任务进行中'); return; }
+  const ok = await confirmModal('分析组件存储需要管理员权限，Windows 将弹出 UAC 授权框。继续？', '分析组件存储');
+  if (!ok) return;
+  const err = await call('AnalyzeComponentStore');
+  if (err) toast(err);
+};
+
+$('#btn-dism-clean').onclick = async () => {
+  if (dismBusy) { toast('已有组件存储任务进行中'); return; }
+  const ok = await confirmModal(
+    '组件清理将以管理员身份执行 DISM（约 5-20 分钟），期间请勿关闭本程序。不使用 /ResetBase，清理后仍可卸载已装更新。确认执行？',
+    '执行组件存储清理');
+  if (!ok) return;
+  const err = await call('StartComponentCleanup');
+  if (err) toast(err);
+};
+
+window.runtime.EventsOn('dism:progress', (p) => {
+  if (!p.running && !p.done) return;
+  if (p.running) {
+    setDismBusy(true, p.kind === 'analyze' ? '正在分析组件存储…' : '正在清理组件存储…');
+    if (p.pct > 0) {
+      $('#dism-progress-fill').classList.remove('indeterminate');
+      $('#dism-progress-fill').style.width = p.pct.toFixed(1) + '%';
+      $('#dism-progress-pct').textContent = Math.round(p.pct) + '%';
+    }
+    $('#dism-progress-line').textContent = p.line || '';
+    return;
+  }
+  // 任务结束
+  setDismBusy(false);
+  $('#dism-progress-fill').classList.remove('indeterminate');
+  $('#dism-progress-fill').style.width = '100%';
+  if (p.ok && p.report) renderDismReport(p.report);
+  if (!p.ok && p.message) $('#dism-status').textContent = '执行失败';
+  toast(p.message || (p.ok ? '任务完成' : '任务失败'));
+});
+
 /* ── 导航 ───────────────────────────────────────────────────────────── */
 
-const TAB_LOADERS = { custom: refreshDirs, history: refreshHistory, registry: () => { if (!regEntries.length) scanRegistry(); } };
+const TAB_LOADERS = { custom: refreshDirs, history: refreshHistory, registry: () => { if (!regEntries.length) scanRegistry(); }, tools: refreshDismInfo };
 
 $$('.rail-item').forEach((btn) => btn.onclick = () => {
   $$('.rail-item').forEach((x) => { x.classList.remove('is-active'); x.removeAttribute('aria-current'); });

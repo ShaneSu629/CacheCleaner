@@ -40,6 +40,7 @@
     <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M9 9.6l3 3.4 3-3.4M12 13v3.2M9.8 14.6h4.4"/></symbol>
     <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M12 3.2l7 2.6v6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9v-6z"/><path d="M9.2 12.2l2 2 3.6-3.8"/></symbol>
     <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3.6l8.4 4.4L12 12.4 3.6 8z"/><path d="M3.6 12.4L12 16.8l8.4-4.4"/><path d="M3.6 16.6L12 21l8.4-4.4"/></symbol>
+    <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.2 6.6a4.2 4.2 0 0 0-5.5 5L3.4 16.9a2 2 0 0 0 2.8 2.8l5.3-5.3a4.2 4.2 0 0 0 5-5.5l-2.6 2.6-2.1-.7-.7-2.1z"/></symbol>
   </defs>
 </svg>
 
@@ -81,11 +82,14 @@
       <button class="rail-item" data-tab="registry">
         <svg class="icon"><use href="#i-registry"/></svg><span>注册表</span>
       </button>
+      <button class="rail-item" data-tab="tools">
+        <svg class="icon"><use href="#i-tools"/></svg><span>系统工具</span>
+      </button>
       <button class="rail-item" data-tab="history">
         <svg class="icon"><use href="#i-history"/></svg><span>清理历史</span>
       </button>
       <div class="rail-foot">
-        <span class="rail-badge">v3.3</span>
+        <span class="rail-badge">v3.4</span>
         <span class="rail-note">Fluent</span>
       </div>
     </nav>
@@ -247,6 +251,65 @@
             <svg class="icon"><use href="#i-empty"/></svg>
             <p>未发现可清理的注册表项</p>
             <span>打开本页时会自动扫描一次</span>
+          </div>
+        </section>
+      </section>
+
+      <!-- 系统工具 -->
+      <section class="panel" id="tab-tools" role="tabpanel" aria-label="系统工具">
+        <div class="panel-head reveal" style="--d:0ms">
+          <div class="panel-title">
+            <h2>系统工具</h2>
+            <p class="sub">组件存储（WinSxS）清理等需要管理员权限的系统级维护</p>
+          </div>
+        </div>
+
+        <div class="callout reveal" style="--d:40ms">
+          <svg class="icon"><use href="#i-warning"/></svg>
+          <div>
+            <strong>需要管理员权限</strong>
+            <span>点击按钮后 Windows 会弹出 UAC 授权框，授权后由 DISM 在后台执行（组件清理约需 5-20 分钟）。不使用 /ResetBase，清理后仍可卸载已装更新。</span>
+          </div>
+        </div>
+
+        <section class="card acrylic reveal" style="--d:80ms">
+          <header class="card-head">
+            <h3>组件存储（WinSxS）<span class="card-hint" id="dism-status">尚未分析</span></h3>
+            <div class="card-actions">
+              <button class="btn btn-sm btn-subtle" id="btn-dism-analyze">
+                <svg class="icon"><use href="#i-scan"/></svg><span>分析组件存储</span>
+              </button>
+              <button class="btn btn-sm btn-danger" id="btn-dism-clean">
+                <svg class="icon"><use href="#i-trash"/></svg><span>执行组件清理</span>
+              </button>
+            </div>
+          </header>
+
+          <div class="progress-card dism-progress" id="dism-progress" hidden>
+            <div class="progress-head">
+              <span class="progress-label" id="dism-progress-text">等待提权授权…</span>
+              <span class="progress-pct" id="dism-progress-pct">0%</span>
+            </div>
+            <div class="progress-track"><div class="progress-fill" id="dism-progress-fill"></div></div>
+            <div class="dism-progress-line" id="dism-progress-line"></div>
+          </div>
+
+          <div class="table-wrap" id="dism-report" hidden>
+            <table class="hist">
+              <tbody>
+                <tr><td>资源管理器报告大小</td><td id="dism-reported">—</td></tr>
+                <tr><td>实际大小</td><td id="dism-actual">—</td></tr>
+                <tr><td>可回收包数</td><td id="dism-reclaimable">—</td></tr>
+                <tr><td>上次清理日期</td><td id="dism-lastclean">—</td></tr>
+                <tr><td>清理建议</td><td id="dism-recommended">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="dism-raw" id="dism-raw" hidden><pre id="dism-raw-text"></pre></div>
+          <div class="empty is-shown" id="empty-dism">
+            <svg class="icon"><use href="#i-empty"/></svg>
+            <p>尚未分析组件存储</p>
+            <span>分析可查看 WinSxS 实际占用与可回收空间（约 1 分钟）</span>
           </div>
         </section>
       </section>
