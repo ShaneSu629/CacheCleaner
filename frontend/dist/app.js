@@ -834,7 +834,13 @@ function showUpdateAlert(info) {
   const alertEl = $('#update-alert');
   const text = $('#update-alert-text');
   if (!alertEl || !text) return;
-  text.textContent = `当前 ${info.current}，最新 ${info.latest}。可前往下载页获取新版本。`;
+  let msg = `当前 ${info.current}，最新 ${info.latest}。可前往下载页获取新版本。`;
+  if (info.notes) {
+    // Release Notes 只显示前 3 行，避免弹窗过长
+    const lines = info.notes.split('\n').filter((l) => l.trim()).slice(0, 3);
+    if (lines.length) msg += '\n\n更新内容：\n' + lines.map((l) => '· ' + l.trim()).join('\n');
+  }
+  text.textContent = msg;
   show(alertEl, true);
   $('#btn-alert-now').focus();
 }
