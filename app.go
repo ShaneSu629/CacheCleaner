@@ -56,11 +56,13 @@ type LockerDTO struct {
 
 // CleanResult 是清理结果。Cleaned 为成功清理的路径，前端据此移除列表项；
 // Failed 保留失败明细，失败项仍留在列表中供用户重试。
+// ScheduledReboot 为"被占用但已登记重启删除"的路径（视同成功，重启后生效）。
 type CleanResult struct {
-	Freed   int64          `json:"freed"`
-	Count   int64          `json:"count"`
-	Cleaned []string       `json:"cleaned"`
-	Failed  []CleanFailure `json:"failed"`
+	Freed           int64          `json:"freed"`
+	Count           int64          `json:"count"`
+	Cleaned         []string       `json:"cleaned"`
+	Failed          []CleanFailure `json:"failed"`
+	ScheduledReboot []string       `json:"scheduledReboot"`
 }
 
 // RegEntryDTO 是传给前端的注册表垃圾项。
@@ -297,8 +299,9 @@ func (a *App) CleanSelected(paths []string) CleanResult {
 	}
 	emitCleanProgress(clean.Progress{Total: len(chosen), Path: "准备清理…"})
 	applog.Info("清理开始: %d 项", len(chosen))
-	freed, count, cleaned, failed := clean.Clean(chosen, cfg, emitCleanProgress)
-	applog.Info("清理结束: 成功 %d 项 / 释放 %d 字节, 失败 %d 项", count, freed, len(failed))
+	freed, count, cleaned, failed, scheduled := clean.Clean(chosen, cfg, emitCleanProgress)
+	applog.Info("清理结束: 成功 %d 项 / 释放 %d 字节, 失败 %d 项, 重启删除 %d 项",
+		count, freed, len(failed), len(scheduled))
 	for _, f := range failed {
 		applog.Error("清理失败: %s", f)
 	}
@@ -308,10 +311,17 @@ func (a *App) CleanSelected(paths []string) CleanResult {
 		cleanedSet[e.Path] = true
 		result.Cleaned = append(result.Cleaned, e.Path)
 	}
+	for _, e := range scheduled {
+		result.ScheduledReboot = append(result.ScheduledReboot, e.Path)
+	}
 
-	// 只有真正删掉的项才从扫描结果中移除：失败项与被排除项保留在列表里供重试
+	// 只有真正删掉的项才从扫描结果中移除：失败项与被排除项保留在列表里供重试；
+	// 登记重启删除的项也移除（已处理，重启后生效）。
 	a.mu.Lock()
 	for _, e := range cleaned {
+		delete(a.lastEntries, e.Path)
+	}
+	for _, e := range scheduled {
 		delete(a.lastEntries, e.Path)
 	}
 	a.mu.Unlock()

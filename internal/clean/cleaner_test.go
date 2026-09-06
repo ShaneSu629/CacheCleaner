@@ -28,7 +28,7 @@ func TestCleanRemovesAndRecordsHistoryOnce(t *testing.T) {
 	entries := []model.CacheEntry{{Path: cacheDir, ShortPath: "Cache", Size: 1024}}
 
 	var got []Progress
-	freed, count, cleaned, failed := Clean(entries, cfg, func(p Progress) { got = append(got, p) })
+	freed, count, cleaned, failed, _ := Clean(entries, cfg, func(p Progress) { got = append(got, p) })
 	if len(failed) != 0 {
 		t.Fatalf("不应有失败项: %v", failed)
 	}
@@ -80,7 +80,7 @@ func TestCleanSkipsExcluded(t *testing.T) {
 	cfg.ExcludeDirs = []string{"logs"}
 	entries := []model.CacheEntry{{Path: cacheDir, ShortPath: "logs", Size: 10}}
 
-	freed, count, cleaned, failed := Clean(entries, cfg, nil)
+	freed, count, cleaned, failed, _ := Clean(entries, cfg, nil)
 	if count != 0 || freed != 0 || len(cleaned) != 0 || len(failed) != 0 {
 		t.Fatalf("被排除项应静默跳过: freed=%d count=%d cleaned=%d failed=%v", freed, count, len(cleaned), failed)
 	}

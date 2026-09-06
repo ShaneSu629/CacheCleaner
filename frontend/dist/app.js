@@ -311,6 +311,7 @@ $('#btn-clean').onclick = async () => {
     setCleaning(false);
   }
   const failed = res.failed || [];
+  const sched = res.scheduledReboot || [];
   if (failed.length) {
     const busyPaths = failed
       .filter((f) => f.error && /Access is denied|denied|being used|另一个程序|占用/.test(f.error))
@@ -321,7 +322,7 @@ $('#btn-clean').onclick = async () => {
       try { lockers = await call('FindLockers', busyPaths) || []; } catch (e) { lockers = []; }
     }
     if (lockers.length) {
-      showLockerModal(res, failed, busyPaths, lockers);
+      showLockerModal(res, failed, busyPaths, lockers, sched);
     } else {
       let detail = '';
       if (busyPaths.length) {
@@ -329,8 +330,15 @@ $('#btn-clean').onclick = async () => {
       } else {
         detail = `已清理 ${res.count} 项，释放 ${fmtSize(res.freed)}。\n有 ${failed.length} 项清理失败，详情见日志。`;
       }
+      if (sched.length) {
+        detail += `\n\n另有 ${sched.length} 项被占用，已登记为「下次开机时自动删除」。`;
+      }
       alertModal(detail, '清理完成（部分失败）');
     }
+  } else if (sched.length) {
+    alertModal(
+      `已清理 ${res.count} 项，释放 ${fmtSize(res.freed)}。\n\n其中 ${sched.length} 项正被运行中的程序占用，已登记为「下次开机时自动删除」，重启电脑后生效。`,
+      '清理完成（含延迟删除）');
   } else {
     toast(`已清理 ${res.count} 项，释放 ${fmtSize(res.freed)}`);
   }
@@ -344,7 +352,7 @@ $('#btn-clean').onclick = async () => {
 };
 
 // 占用进程弹窗：列出占用者，用户可以一键结束（后端校验安全后才杀）。
-async function showLockerModal(res, failed, busyPaths, lockers) {
+async function showLockerModal(res, failed, busyPaths, lockers, sched) {
   const scrim = $('#modal');
   scrim.classList.add('top');
   scrim.dataset.mode = 'alert';
@@ -352,11 +360,14 @@ async function showLockerModal(res, failed, busyPaths, lockers) {
   const safeNames = lockers.map((l) => `${l.name}（${l.safe ? '可结束' : '系统进程'}）`).join('、');
   const itemList = lockers.slice(0, 8).map((l) =>
     `<span class="locker-chip ${l.safe ? '' : 'protected'}">${esc(l.name)}</span>`).join(' ');
+  const schedNote = sched && sched.length
+    ? `<br/>另有 ${sched.length} 项已登记为「下次开机自动删除」。`
+    : '';
   $('#modal-text').innerHTML =
     `已清理 ${res.count} 项，释放 ${fmtSize(res.freed)}。<br/>` +
     `${failed.length} 项清理失败。<br/><br/>` +
     `占用文件进程：${itemList || '（未识别）'}<br/><br/>` +
-    `<small>结束进程会关闭对应软件（未保存的数据可能丢失）。</small>`;
+    `<small>结束进程会关闭对应软件（未保存的数据可能丢失）。</small>` + schedNote;
   // 底部动作：结束进程按钮 + 知道了
   $('#modal-ok').textContent = '知道了';
   $('#modal-ok').className = 'btn btn-accent';

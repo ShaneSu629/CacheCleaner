@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"cachecleaner/internal/applog"
 	"cachecleaner/internal/config"
 	"cachecleaner/internal/model"
 )
@@ -45,10 +46,11 @@ func report(p ProgressFunc, pr Progress) {
 }
 
 // Clean 执行清理：跳过排除目录，尝试删除。
-// 返回值：释放字节数、成功项数、实际被清理的条目（供调用方更新界面与历史）、失败列表（"路径: 错误"）。
+// 返回值：释放字节数、成功项数、实际被清理的条目（供调用方更新界面与历史）、
+// 失败列表（"路径: 错误"）、已登记重启删除的条目（被占用但延迟到下次开机删除）。
 // 释放字节数取扫描时统计的 e.Size（与界面展示一致；清理前不再重复遍历大目录，清理耗时约减半）。
 // progress 可选，每处理完一项回调一次；传 nil 表示不需要进度（如 CLI 静默模式）。
-func Clean(entries []model.CacheEntry, cfg *config.Config, progress ProgressFunc) (freed int64, count int64, cleaned []model.CacheEntry, failed []string) {
+func Clean(entries []model.CacheEntry, cfg *config.Config, progress ProgressFunc) (freed int64, count int64, cleaned []model.CacheEntry, failed []string, scheduled []model.CacheEntry) {
 	var totalBytes int64
 	for _, e := range entries {
 		totalBytes += e.Size
@@ -62,11 +64,22 @@ func Clean(entries []model.CacheEntry, cfg *config.Config, progress ProgressFunc
 		}
 		if err := os.RemoveAll(e.Path); err != nil {
 			msg := err.Error()
-			// Windows 上"Access is denied"多半是文件正被运行中的程序占用（共享冲突），
-			// 把提示翻译成用户能懂的指引，而不是原样抛英文错误码。
-			if strings.Contains(msg, "Access is denied") || strings.Contains(msg, "denied") {
-				msg += "（文件可能正被运行中的程序占用，退出对应软件后重试）"
+			// Windows 上"Access is denied"多半是文件正被运行中的程序占用（共享冲突）。
+			// 自动登记"重启时删除"（Windows 官方延迟删除机制），并告诉用户结果。
+			nScheduled := 0
+			if strings.Contains(msg, "Access is denied") || strings.Contains(msg, "denied") ||
+				strings.Contains(msg, "being used") || strings.Contains(msg, "另一个进程") {
+				nScheduled = ScheduleRebootDeletes(e.Path)
 			}
+			if nScheduled > 0 {
+				// 已登记重启删除：视同处理成功（延迟生效），单独归类供前端提示
+				freed += e.Size
+				count++
+				scheduled = append(scheduled, e)
+				applog.Info("占用项已登记重启删除: %s (%d 个文件)", e.ShortPath, nScheduled)
+				continue
+			}
+			msg += "（文件可能正被运行中的程序占用，退出对应软件后重试）"
 			failed = append(failed, e.Path+": "+msg)
 			continue
 		}

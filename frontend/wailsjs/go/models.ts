@@ -19,6 +19,7 @@ export namespace main {
 	    count: number;
 	    cleaned: string[];
 	    failed: CleanFailure[];
+	    scheduledReboot: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new CleanResult(source);
@@ -30,6 +31,7 @@ export namespace main {
 	        this.count = source["count"];
 	        this.cleaned = source["cleaned"];
 	        this.failed = this.convertValues(source["failed"], CleanFailure);
+	        this.scheduledReboot = source["scheduledReboot"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
