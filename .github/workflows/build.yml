@@ -152,15 +152,25 @@ jobs:
         run: |
           Rename-Item -Path build\bin\CacheCleaner.exe -NewName CacheCleaner-GUI-windows-amd64.exe
 
+      - name: Generate SHA256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 build\bin\CacheCleaner-GUI-windows-amd64.exe).Hash.ToLower()
+          "$hash  CacheCleaner-GUI-windows-amd64.exe" | Out-File -Encoding ascii build\bin\SHA256SUMS.txt
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: CacheCleaner-GUI-windows-amd64
-          path: build/bin/CacheCleaner-GUI-windows-amd64.exe
+          path: |
+            build/bin/CacheCleaner-GUI-windows-amd64.exe
+            build/bin/SHA256SUMS.txt
           if-no-files-found: error
 
       - name: Publish release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: build/bin/CacheCleaner-GUI-windows-amd64.exe
+          files: |
+            build/bin/CacheCleaner-GUI-windows-amd64.exe
+            build/bin/SHA256SUMS.txt

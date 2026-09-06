@@ -8,6 +8,8 @@ export function AddExcludeDir(arg1:string):Promise<void>;
 
 export function AnalyzeComponentStore():Promise<string>;
 
+export function ApplyUpdateAndRestart():Promise<string>;
+
 export function CheckUpdate(arg1:boolean):Promise<main.UpdateInfoDTO>;
 
 export function CleanRegistry(arg1:Array<string>):Promise<main.CleanResult>;
@@ -25,6 +27,8 @@ export function GetDismInfo():Promise<main.DismInfoDTO>;
 export function GetExcludeDirs():Promise<Array<string>>;
 
 export function GetHistory():Promise<Array<main.HistoryDTO>>;
+
+export function GetUpdateDownload():Promise<main.UpdateDownloadDTO>;
 
 export function GetVersion():Promise<string>;
 
@@ -49,3 +53,5 @@ export function SnoozeUpdate(arg1:number):Promise<void>;
 export function StartComponentCleanup():Promise<string>;
 
 export function StartComponentRepair():Promise<string>;
+
+export function StartUpdateDownload():Promise<string>;

@@ -777,6 +777,30 @@ $('#about-close').onclick = () => {
 /* ── 软件更新 ──────────────────────────────────────────────────────── */
 
 let lastUpdateInfo = null; // 缓存最近一次更新信息，供弹窗/页面共享
+let dlStatus = { state: 'idle', pct: 0 }; // 下载状态（前端轮询 GetUpdateDownload）
+let dlTimer = null; // 下载进度轮询定时器
+
+// 轮询下载进度（1 秒一次，下载完成/出错后自动停止）
+function startDlPolling() {
+  if (dlTimer) return;
+  dlTimer = setInterval(async () => {
+    let d;
+    try { d = await call('GetUpdateDownload'); } catch (e) { return; }
+    dlStatus = d || { state: 'idle', pct: 0 };
+    renderUpdateDl(dlStatus.state, dlStatus.pct);
+    // 状态变化后重新渲染按钮（下载完成 → 显示「更新并重启」）
+    if (lastUpdateInfo) renderUpdate(lastUpdateInfo);
+    if (dlStatus.state === 'done' || dlStatus.state === 'error' || dlStatus.state === 'idle') {
+      clearInterval(dlTimer);
+      dlTimer = null;
+      if (dlStatus.state === 'done') {
+        toast('新版本已下载完成，可更新并重启');
+      } else if (dlStatus.state === 'error') {
+        toast('下载失败：' + (dlStatus.message || '未知错误'));
+      }
+    }
+  }, 1000);
+}
 
 // 渲染设置页「软件更新」tab 的版本信息
 function renderUpdate(info) {
@@ -815,17 +839,58 @@ function renderUpdate(info) {
   }
 
   // 按钮可见性 / 可用性
-  const btnNow   = $('#btn-update-now');
+  const btnNow   = $('#btn-update-now');       // 更新并重启
+  const btnDl    = $('#btn-update-download');  // 后台下载
   const btnLater = $('#btn-update-later');
   const btnSkip  = $('#btn-update-skip');
 
-  if (btnNow)   show(btnNow,   info.hasUpdate && !info.skipped);
+  const hasUpd = info.hasUpdate && !info.skipped;
+  if (btnNow)   show(btnNow,   hasUpd && dlStatus.state === 'done'); // 只有下载完成后才能更新并重启
+  if (btnDl)    show(btnDl,    hasUpd && dlStatus.state !== 'done'); // 下载完成前可点后台下载
   if (btnLater) btnLater.disabled = !info.hasUpdate || info.snoozed || info.skipped;
   if (btnSkip)  btnSkip.disabled  = !info.hasUpdate || info.skipped;
+
+  // 下载进度条
+  renderUpdateDl(dlStatus.state, dlStatus.pct);
 
   // 侧栏版本号
   const rv = $('#rail-version');
   if (rv && info.current) rv.textContent = info.current;
+}
+
+// 渲染下载进度
+function renderUpdateDl(state, pct) {
+  const bar = $('#update-dl-progress');
+  if (!bar) return;
+  if (!state || state === 'idle') { show(bar, false); return; }
+  show(bar, true);
+  const fill = $('#update-dl-fill');
+  const txt = $('#update-dl-text');
+  const pctEl = $('#update-dl-pct');
+  switch (state) {
+    case 'downloading':
+      txt.textContent = '正在后台下载…';
+      fill.classList.remove('indeterminate');
+      fill.style.width = (pct || 0).toFixed(1) + '%';
+      pctEl.textContent = Math.round(pct || 0) + '%';
+      break;
+    case 'verifying':
+      txt.textContent = '正在校验完整性…';
+      pctEl.textContent = '100%';
+      break;
+    case 'done':
+      txt.textContent = '下载完成，可更新并重启';
+      fill.style.width = '100%';
+      pctEl.textContent = '100%';
+      break;
+    case 'error':
+      txt.textContent = '下载失败';
+      fill.classList.add('indeterminate');
+      pctEl.textContent = '';
+      break;
+    default:
+      break;
+  }
 }
 
 // 启动更新提醒弹窗（仅在有更新 && 未推迟 && 未跳过时自动弹出）
@@ -856,6 +921,17 @@ function initUpdate() {
   window.runtime.EventsOn('update:info', (info) => {
     renderUpdate(info);
     showUpdateAlert(info);
+    // 后端可能已自动开始后台下载（无静默/跳过时），开始轮询进度
+    call('GetUpdateDownload').then((d) => {
+      dlStatus = d || { state: 'idle', pct: 0 };
+      if (dlStatus.state === 'downloading' || dlStatus.state === 'verifying') {
+        startDlPolling();
+      } else if (dlStatus.state === 'done') {
+        renderUpdateDl('done', 100);
+        renderUpdate(info);
+        toast('新版本已下载完成，可更新并重启');
+      }
+    }).catch(() => {});
   });
 
   // 设置页「检查更新」按钮（force=true，忽略静默/跳过策略）
@@ -879,12 +955,29 @@ function initUpdate() {
     };
   }
 
-  // 设置页按钮
+  // 设置页按钮：更新并重启（下载完成后出现）
   const btnNow = $('#btn-update-now');
   if (btnNow) {
-    btnNow.onclick = () => {
-      const url = lastUpdateInfo && lastUpdateInfo.url ? lastUpdateInfo.url : '';
-      call('OpenDownloadPage', url);
+    btnNow.onclick = async () => {
+      const ok = await confirmModal(
+        '将关闭程序、替换为新版本并自动重新打开。确定现在更新吗？',
+        '更新并重启');
+      if (!ok) return;
+      const err = await call('ApplyUpdateAndRestart');
+      if (err) { toast(err); return; }
+      // 替换脚本已在后台启动，退出本程序让它接管
+      try { window.runtime.Quit(); } catch (e) { /* 退出失败由脚本兜底等待 */ }
+    };
+  }
+
+  // 设置页按钮：后台下载
+  const btnDl = $('#btn-update-download');
+  if (btnDl) {
+    btnDl.onclick = async () => {
+      const err = await call('StartUpdateDownload');
+      if (err) { toast(err); return; }
+      toast('已开始后台下载，完成后会提示');
+      startDlPolling();
     };
   }
 
@@ -912,7 +1005,19 @@ function initUpdate() {
     };
   }
 
-  // 启动提醒弹窗按钮
+  // 启动提醒弹窗按钮：后台下载
+  const alertDl = $('#btn-alert-download');
+  if (alertDl) {
+    alertDl.onclick = async () => {
+      const err = await call('StartUpdateDownload');
+      if (err) { toast(err); return; }
+      hideUpdateAlert();
+      toast('已开始后台下载，完成后会提示');
+      startDlPolling();
+    };
+  }
+
+  // 启动提醒弹窗按钮：前往下载页（保留手动更新入口）
   const alertNow = $('#btn-alert-now');
   if (alertNow) {
     alertNow.onclick = () => {
@@ -964,6 +1069,12 @@ async function refreshUpdate() {
     // 先拿当前版本，再静默检查（受静默/跳过策略约束）
     const v = await call('GetVersion');
     const info = await call('CheckUpdate', false);
+    renderUpdate(Object.assign({}, info, { current: info.current || v }));
+    // 恢复下载状态（如果上次下载已完成但未应用）
+    const d = await call('GetUpdateDownload');
+    dlStatus = d || { state: 'idle', pct: 0 };
+    renderUpdateDl(dlStatus.state, dlStatus.pct);
+    if (dlStatus.state === 'downloading' || dlStatus.state === 'verifying') startDlPolling();
     renderUpdate(Object.assign({}, info, { current: info.current || v }));
   } catch (e) { /* 静默 */ }
 }

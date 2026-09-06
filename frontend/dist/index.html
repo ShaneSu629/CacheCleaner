@@ -378,8 +378,11 @@
             <div class="card-actions">
               <button class="btn btn-sm btn-subtle" id="btn-update-later" disabled>稍后提醒</button>
               <button class="btn btn-sm btn-subtle" id="btn-update-skip" disabled>跳过此版本</button>
+              <button class="btn btn-sm btn-subtle" id="btn-update-download" hidden>
+                <svg class="icon"><use href="#i-update"/></svg><span>后台下载</span>
+              </button>
               <button class="btn btn-sm btn-accent" id="btn-update-now" hidden>
-                <svg class="icon"><use href="#i-update"/></svg><span>前往下载</span>
+                <svg class="icon"><use href="#i-update"/></svg><span>更新并重启</span>
               </button>
             </div>
           </header>
@@ -393,6 +396,15 @@
                 <tr><td>安装包大小</td><td id="upd-size">—</td></tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- 下载进度 -->
+          <div class="progress-card" id="update-dl-progress" hidden>
+            <div class="progress-head">
+              <span class="progress-label" id="update-dl-text">正在下载…</span>
+              <span class="progress-pct" id="update-dl-pct">0%</span>
+            </div>
+            <div class="progress-track"><div class="progress-fill" id="update-dl-fill"></div></div>
           </div>
 
           <div class="update-notes" id="update-notes" hidden>
@@ -467,6 +479,9 @@
     <div class="dialog-actions">
       <button class="btn btn-subtle" id="btn-alert-skip">跳过此版本</button>
       <button class="btn btn-subtle" id="btn-alert-later">稍后提醒</button>
+      <button class="btn btn-subtle" id="btn-alert-download">
+        <svg class="icon"><use href="#i-update"/></svg><span>后台下载</span>
+      </button>
       <button class="btn btn-accent" id="btn-alert-now">
         <svg class="icon"><use href="#i-update"/></svg><span>前往下载</span>
       </button>

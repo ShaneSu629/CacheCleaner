@@ -125,7 +125,8 @@ func (a *App) startup(ctx context.Context) {
 		cfg.OS, cfg.Home, cfg.Documents, cfg.Windows)
 
 	// 启动后延迟自动检查更新：走后台 goroutine，失败或处于静默期都不打扰用户。
-	// 前端收到 update:info 后自行决定是否弹窗（Snoozed/Skipped 时不弹）。
+	// 发现新版本且未跳过时自动开始后台下载（商业软件式静默下载），
+	// 下载完成后前端弹提示，用户点「更新并重启」即可完成更新。
 	go func() {
 		time.Sleep(5 * time.Second)
 		info, err := update.Check(false)
@@ -135,6 +136,13 @@ func (a *App) startup(ctx context.Context) {
 		}
 		if info.HasUpdate {
 			applog.Info("发现新版本: %s -> %s", info.Current, info.Latest)
+			if !info.Skipped && !info.Snoozed {
+				if derr := update.StartDownload(info); derr != nil {
+					applog.Error("自动下载启动失败: %v", derr)
+				} else {
+					applog.Info("已开始后台自动下载 %s", info.Latest)
+				}
+			}
 		}
 		a.emit("update:info", toUpdateDTO(info))
 	}()
@@ -508,6 +516,55 @@ func (a *App) OpenDownloadPage(url string) {
 	}
 	runtime.BrowserOpenURL(a.ctx, target)
 	applog.Info("已打开下载页: %s", target)
+}
+
+// ── 自动更新（后台下载 + 替换重启）──
+
+// UpdateDownloadDTO 是传给前端的下载进度。
+type UpdateDownloadDTO struct {
+	State    string  `json:"state"`
+	Pct      float64 `json:"pct"`
+	Received int64   `json:"received"`
+	Total    int64   `json:"total"`
+	Message  string  `json:"message"`
+}
+
+// StartUpdateDownload 后台下载最新版本（异步，进度经 GetUpdateDownload 轮询）。
+// 返回空串表示已启动，否则为错误信息。
+func (a *App) StartUpdateDownload() string {
+	// 先查一次拿最新信息（含真实下载 URL 与大小）
+	info, err := update.Check(true)
+	if err != nil {
+		applog.Error("下载前检查更新失败: %v", err)
+		return "检查更新失败: " + err.Error()
+	}
+	if !info.HasUpdate {
+		return "当前已是最新版本"
+	}
+	if err := update.StartDownload(info); err != nil {
+		applog.Error("启动下载失败: %v", err)
+		return err.Error()
+	}
+	applog.Info("开始后台下载 %s", info.Latest)
+	return ""
+}
+
+// GetUpdateDownload 返回当前下载进度。
+func (a *App) GetUpdateDownload() UpdateDownloadDTO {
+	d := update.GetDownloadInfo()
+	return UpdateDownloadDTO{State: d.State, Pct: d.Pct, Received: d.Received, Total: d.Total, Message: d.Message}
+}
+
+// ApplyUpdateAndRestart 用已下载的新版本替换当前 exe 并重启。
+// 调用成功后本进程应尽快退出（前端随即调 window.close 由 Wails 退出）。
+// 返回空串表示已启动替换脚本，否则为错误信息。
+func (a *App) ApplyUpdateAndRestart() string {
+	if err := update.ApplyAndRestart(); err != nil {
+		applog.Error("应用更新失败: %v", err)
+		return err.Error()
+	}
+	applog.Info("更新替换脚本已启动，程序即将退出")
+	return ""
 }
 
 // ── 注册表清理 ──

@@ -163,6 +163,26 @@ export namespace main {
 	        this.size = source["size"];
 	    }
 	}
+	export class UpdateDownloadDTO {
+	    state: string;
+	    pct: number;
+	    received: number;
+	    total: number;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateDownloadDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.pct = source["pct"];
+	        this.received = source["received"];
+	        this.total = source["total"];
+	        this.message = source["message"];
+	    }
+	}
 	export class UpdateInfoDTO {
 	    current: string;
 	    latest: string;

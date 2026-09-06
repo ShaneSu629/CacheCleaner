@@ -185,8 +185,9 @@ type release struct {
 	Draft       bool   `json:"draft"`
 	Prerelease  bool   `json:"prerelease"`
 	Assets      []struct {
-		Name string `json:"name"`
-		Size int64  `json:"size"`
+		Name               string `json:"name"`
+		Size               int64  `json:"size"`
+		BrowserDownloadURL string `json:"browser_download_url"`
 	} `json:"assets"`
 }
 

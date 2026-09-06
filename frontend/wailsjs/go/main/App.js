@@ -14,6 +14,10 @@ export function AnalyzeComponentStore() {
   return window['go']['main']['App']['AnalyzeComponentStore']();
 }
 
+export function ApplyUpdateAndRestart() {
+  return window['go']['main']['App']['ApplyUpdateAndRestart']();
+}
+
 export function CheckUpdate(arg1) {
   return window['go']['main']['App']['CheckUpdate'](arg1);
 }
@@ -48,6 +52,10 @@ export function GetExcludeDirs() {
 
 export function GetHistory() {
   return window['go']['main']['App']['GetHistory']();
+}
+
+export function GetUpdateDownload() {
+  return window['go']['main']['App']['GetUpdateDownload']();
 }
 
 export function GetVersion() {
@@ -96,4 +104,8 @@ export function StartComponentCleanup() {
 
 export function StartComponentRepair() {
   return window['go']['main']['App']['StartComponentRepair']();
+}
+
+export function StartUpdateDownload() {
+  return window['go']['main']['App']['StartUpdateDownload']();
 }
