@@ -24,6 +24,15 @@ const fmtSize = (b) => {
   return n.toFixed(1) + ' ' + u[i];
 };
 
+// GitHub 的 ISO 时间（2026-09-06T05:53:16Z）转本地时间 "2026-09-06 13:53"
+const fmtTime = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
 const riskClass = (r) => ({ '安全': 'ok', '谨慎': 'warn', '复核': 'risk' }[r] || '');
 
 const show = (el, on) => { if (el) el.hidden = !on; };
@@ -852,7 +861,7 @@ function renderUpdate(info) {
   const sz  = $('#upd-size');
   if (cur) cur.textContent = info.current || '—';
   if (lat) lat.textContent = info.latest || '—';
-  if (pub) pub.textContent = info.publishedAt || '—';
+  if (pub) pub.textContent = fmtTime(info.publishedAt);
   if (sz)  sz.textContent = info.size ? fmtSize(info.size) : '—';
 
   // 状态标签
