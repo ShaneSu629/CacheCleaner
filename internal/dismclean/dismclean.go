@@ -40,9 +40,23 @@ type Status struct {
 // 结束后向 doneFile 写入 "0"（成功）或 "1"（失败）。
 // 关键细节：echo 的数字与 > 之间必须有空格——"echo 0>file" 中 0> 会被 cmd
 // 解析成重定向句柄 0（而不是输出文本 0），done 文件内容变成垃圾导致误判失败。
-func buildJobCommand(dismArgs, outFile, doneFile string) string {
-	return fmt.Sprintf(`dism %s >"%s" 2>&1 && (echo 0 > "%s") || (echo 1 > "%s")`,
-		dismArgs, outFile, doneFile, doneFile)
+// needTrustedInstaller 为 true 时，在 dism 前先尝试启动 TrustedInstaller 服务
+// 并暂停 Windows Update（WinSxS 文件被 wuauserv 独占时报 0x80070005），
+// 清理结束后恢复 Windows Update。
+//
+// 服务控制用 sc 而非 net：net stop/start 在有服务依赖时会弹交互式确认提示，
+// 在 CREATE_NO_WINDOW 的 cmd 中用户看不到也无法操作 → 命令卡死。
+// sc stop/start 非交互式，直接发控制信号后立即返回。
+func buildJobCommand(dismArgs, outFile, doneFile string, needTrustedInstaller bool) string {
+	prefix := ""
+	suffix := ""
+	if needTrustedInstaller {
+		// sc stop/start 非交互式，失败时也不影响后续（& 忽略返回值）
+		prefix = `sc stop wuauserv >nul 2>&1 & sc stop UsoSvc >nul 2>&1 & sc start TrustedInstaller >nul 2>&1 & `
+		suffix = ` & sc start wuauserv >nul 2>&1 & sc start UsoSvc >nul 2>&1`
+	}
+	return fmt.Sprintf(`%sdism %s >"%s" 2>&1 && (echo 0 > "%s") || (echo 1 > "%s")%s`,
+		prefix, dismArgs, outFile, doneFile, doneFile, suffix)
 }
 
 // pctRe 匹配 DISM 进度行中的百分比，如 [======                    20.0%      ]

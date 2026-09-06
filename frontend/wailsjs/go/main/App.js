@@ -30,6 +30,10 @@ export function ClearUpdateSkip() {
   return window['go']['main']['App']['ClearUpdateSkip']();
 }
 
+export function FindLockers(arg1) {
+  return window['go']['main']['App']['FindLockers'](arg1);
+}
+
 export function GetCustomDirs() {
   return window['go']['main']['App']['GetCustomDirs']();
 }
@@ -48,6 +52,10 @@ export function GetHistory() {
 
 export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
+}
+
+export function KillProcess(arg1, arg2) {
+  return window['go']['main']['App']['KillProcess'](arg1, arg2);
 }
 
 export function LogFrontend(arg1) {
@@ -84,4 +92,8 @@ export function SnoozeUpdate(arg1) {
 
 export function StartComponentCleanup() {
   return window['go']['main']['App']['StartComponentCleanup']();
+}
+
+export function StartComponentRepair() {
+  return window['go']['main']['App']['StartComponentRepair']();
 }

@@ -123,6 +123,24 @@ export namespace main {
 	        this.size = source["size"];
 	    }
 	}
+	export class LockerDTO {
+	    pid: number;
+	    name: string;
+	    path: string;
+	    safe: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LockerDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.pid = source["pid"];
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.safe = source["safe"];
+	    }
+	}
 	export class RegEntryDTO {
 	    key: string;
 	    category: string;

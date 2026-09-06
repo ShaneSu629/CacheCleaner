@@ -6,11 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unsafe"
 
@@ -69,6 +67,11 @@ func StartAnalyze() error { return start("analyze") }
 // StartCleanup 启动组件存储清理（StartComponentCleanup，不带 /ResetBase，清理后仍可卸载已装更新）。
 func StartCleanup() error { return start("cleanup") }
 
+// StartRepair 启动组件存储修复（RestoreHealth）。
+// 针对"清理反复报 0x80070005 / STATUS_CANNOT_DELETE"的组件存储不一致场景，
+// 先修复组件存储再清理（Dism++ 的"修复映像"等价能力）。
+func StartRepair() error { return start("repair") }
+
 // start 启动一次提权作业。同一时刻只允许一个作业。
 func start(kind string) error {
 	if !Available() {
@@ -97,26 +100,31 @@ func start(kind string) error {
 	mu.Unlock()
 
 	dismArgs := "/Online /Cleanup-Image /StartComponentCleanup"
-	if kind == "analyze" {
+	needTI := true // cleanup 依赖 TrustedInstaller
+	switch kind {
+	case "analyze":
 		dismArgs = "/Online /Cleanup-Image /AnalyzeComponentStore"
+		needTI = false
+	case "repair":
+		// RestoreHealth 修复组件存储（从 Windows Update 拉取修复源，耗时最长可达 30 分钟）
+		dismArgs = "/Online /Cleanup-Image /RestoreHealth"
+		needTI = false
 	}
 	// 输出重定向到文件（供进度轮询），结束后写 done 标志。
 	// 用 && / || 而不是 %ERRORLEVEL%，避免依赖延迟展开；命令行整体经 Unicode
 	// 传递（不写 .bat，规避中文用户名路径在 ANSI .bat 中乱码的问题）。
 	// 注意：echo 的数字与 > 之间必须有空格——"echo 0>file" 中 0> 会被 cmd
 	// 解析成重定向句柄 0（而不是输出文本 0），done 文件内容变成垃圾导致误判失败。
-	inner := buildJobCommand(dismArgs, j.outFile, j.doneFile)
+	inner := buildJobCommand(dismArgs, j.outFile, j.doneFile, needTI)
 
 	var runErr error
 	if IsElevated() {
 		// 已是管理员：直接执行，无需再弹 UAC。
+		// 注意必须用 CreateProcess 直接传完整命令行：exec.Command 在 Windows 上
+		// 会按 CommandLineToArgvW 规则转义参数，命令链里的 > & | ( ) 等字符
+		// 被破坏后 cmd 解析失败、进程静默死亡（dism 从未启动、无任何输出）。
 		applog.Info("DISM: 已是管理员，直接执行 %s (输出: %s)", kind, j.outFile)
-		c := exec.Command("cmd.exe", "/c", inner)
-		c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000} // CREATE_NO_WINDOW
-		runErr = c.Start()
-		if runErr == nil {
-			go c.Wait()
-		}
+		runErr = createProcessNoWindow("cmd.exe /c " + inner)
 	} else {
 		applog.Info("DISM: 非管理员，ShellExecute runas 提权启动 %s（等待 UAC 授权）", kind)
 		runErr = shellExecuteRunAs("cmd.exe", "/c "+inner)
@@ -171,6 +179,37 @@ func shellExecuteRunAs(file, params string) error {
 	}
 }
 
+// createProcessNoWindow 通过 CreateProcessW 以原样命令行启动进程（无窗口）。
+// 命令行不经任何转义/解析，避免 exec.Command 的 CommandLineToArgvW 转义
+// 破坏含 > & | ( ) 的命令链。
+func createProcessNoWindow(cmdline string) error {
+	cmdPtr, err := windows.UTF16PtrFromString(cmdline)
+	if err != nil {
+		return err
+	}
+	var si windows.StartupInfo
+	var pi windows.ProcessInformation
+	// CREATE_NO_WINDOW = 0x08000000，防止弹黑框
+	si.Cb = uint32(unsafe.Sizeof(si))
+	si.ShowWindow = 0
+	si.Flags = 0x00000001 // STARTF_USESHOWWINDOW
+	err = windows.CreateProcess(
+		nil,       // lpApplicationName：从命令行第一个 token 解析
+		cmdPtr,    // lpCommandLine：原样传递
+		nil, nil,  // 进程/线程安全属性
+		false,     // 不继承句柄
+		0x08000000, // 创建标志：CREATE_NO_WINDOW
+		nil,       // 环境块：继承当前
+		nil,       // 工作目录：继承当前
+		&si, &pi)
+	if err != nil {
+		return err
+	}
+	windows.CloseHandle(pi.Thread)
+	windows.CloseHandle(pi.Process)
+	return nil
+}
+
 // Poll 读取当前作业的进度快照。无作业时返回零值（Running=false）。
 func Poll() Status {
 	mu.Lock()
@@ -188,20 +227,30 @@ func Poll() Status {
 		st.Done = true
 		st.OK = code == "0"
 		if st.OK {
-			if j.kind == "analyze" {
+			switch j.kind {
+			case "analyze":
 				st.Message = "组件存储分析完成"
-			} else {
+			case "repair":
+				st.Message = "组件存储修复完成，可再次执行清理"
+			default:
 				st.Message = "组件存储清理完成"
 			}
 		} else {
-			st.Message = "DISM 执行失败：" + tailLines(out, 3)
+			msg := tailLines(out, 3)
+			// 错误 5 / 0x80070005 = 拒绝访问：给用户更明确的指引
+			if strings.Contains(msg, "错误: 5") || strings.Contains(msg, "拒绝访问") ||
+				strings.Contains(msg, "0x80070005") || strings.Contains(msg, "Access is denied") {
+				msg = "拒绝访问（错误 5）— 组件存储可能不一致，建议先执行「修复组件存储」再清理"
+			}
+			st.Message = "DISM 执行失败：" + msg
 		}
 		finish(j, out)
-	} else if time.Since(j.started) > 30*time.Minute {
-		// 兜底：组件清理正常十几分钟，超过 30 分钟认为异常终止
+	} else if time.Since(j.started) > 45*time.Minute {
+		// 兜底：组件清理正常十几分钟，修复（RestoreHealth）最长可达 30 分钟，
+		// 统一 45 分钟超时
 		st.Running = false
 		st.Done = true
-		st.Message = "任务超时（30 分钟无结果），已停止跟踪"
+		st.Message = "任务超时（45 分钟无结果），已停止跟踪"
 		finish(j, out)
 	}
 	return st

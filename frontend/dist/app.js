@@ -123,10 +123,35 @@ $('#modal').addEventListener('click', (e) => { if (e.target === $('#modal')) $('
 $('#about').addEventListener('click', (e) => { if (e.target === $('#about')) show($('#about'), false); });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  if (!$('#modal').hidden) $('#modal-cancel').click();
+  if (!$('#modal').hidden && $('#modal').dataset.mode !== 'alert') $('#modal-cancel').click();
   else if (!$('#about').hidden) show($('#about'), false);
   else if (!$('#update-alert').hidden) hideUpdateAlert();
 });
+
+// 顶部醒目确认框：清理失败等需要用户确认的结果，顶在窗口最上方，
+// 遮罩更深、层级最高，必须点「知道了」才关闭（点遮罩/Esc 不关）。
+function alertModal(text, title = '清理结果') {
+  const scrim = $('#modal');
+  scrim.classList.add('top');
+  scrim.dataset.mode = 'alert';
+  $('#modal-title').textContent = title;
+  $('#modal-text').textContent = text;
+  $('#modal-ok').textContent = '知道了';
+  $('#modal-ok').className = 'btn btn-accent';
+  show($('#modal-cancel'), false); // 单项提醒不需要取消按钮
+  show(scrim, true);
+  $('#modal-ok').onclick = () => {
+    scrim.classList.remove('top');
+    delete scrim.dataset.mode;
+    show(scrim, false);
+    $('#modal-ok').onclick = null;
+    $('#modal-ok').className = 'btn btn-danger';
+    $('#modal-ok').textContent = '确认清理';
+    show($('#modal-cancel'), true);
+    if (lastFocused && lastFocused.focus) lastFocused.focus();
+  };
+  $('#modal-ok').focus();
+}
 
 /* ── 清理进度（删除大目录可能持续数分钟，必须让用户看到进展） ───────── */
 
@@ -276,8 +301,30 @@ $('#btn-clean').onclick = async () => {
   } finally {
     setCleaning(false);
   }
-  toast(`已清理 ${res.count} 项，释放 ${fmtSize(res.freed)}` +
-    (res.failed && res.failed.length ? `（失败 ${res.failed.length} 项）` : ''));
+  const failed = res.failed || [];
+  if (failed.length) {
+    const busyPaths = failed
+      .filter((f) => f.error && /Access is denied|denied|being used|另一个程序|占用/.test(f.error))
+      .map((f) => f.path);
+    // 查占用进程（Restart Manager），弹窗里列出占用者并支持一键结束
+    let lockers = [];
+    if (busyPaths.length) {
+      try { lockers = await call('FindLockers', busyPaths) || []; } catch (e) { lockers = []; }
+    }
+    if (lockers.length) {
+      showLockerModal(res, failed, busyPaths, lockers);
+    } else {
+      let detail = '';
+      if (busyPaths.length) {
+        detail = `已清理 ${res.count} 项，释放 ${fmtSize(res.freed)}。\n有 ${failed.length} 项因文件被占用而失败（未识别出占用进程），退出对应软件后重试。`;
+      } else {
+        detail = `已清理 ${res.count} 项，释放 ${fmtSize(res.freed)}。\n有 ${failed.length} 项清理失败，详情见日志。`;
+      }
+      alertModal(detail, '清理完成（部分失败）');
+    }
+  } else {
+    toast(`已清理 ${res.count} 项，释放 ${fmtSize(res.freed)}`);
+  }
   // 只移除真正清理成功的项，失败/被排除的项保留供重试
   const cleaned = new Set(res.cleaned || []);
   entries = entries.filter((e) => !cleaned.has(e.path));
@@ -286,6 +333,67 @@ $('#btn-clean').onclick = async () => {
   renderChart();
   renderKpis();
 };
+
+// 占用进程弹窗：列出占用者，用户可以一键结束（后端校验安全后才杀）。
+async function showLockerModal(res, failed, busyPaths, lockers) {
+  const scrim = $('#modal');
+  scrim.classList.add('top');
+  scrim.dataset.mode = 'alert';
+  $('#modal-title').textContent = '文件被占用，清理未完全成功';
+  const safeNames = lockers.map((l) => `${l.name}（${l.safe ? '可结束' : '系统进程'}）`).join('、');
+  const itemList = lockers.slice(0, 8).map((l) =>
+    `<span class="locker-chip ${l.safe ? '' : 'protected'}">${esc(l.name)}</span>`).join(' ');
+  $('#modal-text').innerHTML =
+    `已清理 ${res.count} 项，释放 ${fmtSize(res.freed)}。<br/>` +
+    `${failed.length} 项清理失败。<br/><br/>` +
+    `占用文件进程：${itemList || '（未识别）'}<br/><br/>` +
+    `<small>结束进程会关闭对应软件（未保存的数据可能丢失）。</small>`;
+  // 底部动作：结束进程按钮 + 知道了
+  $('#modal-ok').textContent = '知道了';
+  $('#modal-ok').className = 'btn btn-accent';
+  $('#modal-ok').onclick = () => closeLockerModal();
+  show($('#modal-cancel'), false);
+  show(scrim, true);
+  $('#modal-ok').focus();
+
+  // 结束进程按钮（新增在 modal-ok 前）
+  let btnKill = $('#btn-kill-locker');
+  if (!btnKill) {
+    btnKill = document.createElement('button');
+    btnKill.id = 'btn-kill-locker';
+    btnKill.className = 'btn btn-danger';
+    btnKill.textContent = '结束占用进程';
+    $('#modal-ok').parentNode.insertBefore(btnKill, $('#modal-ok'));
+  }
+  show(btnKill, lockers.some((l) => l.safe));
+  btnKill.onclick = async () => {
+    btnKill.disabled = true;
+    btnKill.textContent = '正在结束…';
+    for (const l of lockers) {
+      if (!l.safe) continue;
+      try {
+        const err = await call('KillProcess', busyPaths, l.pid);
+        if (err) toast(err);
+      } catch (e) { toast('结束进程失败'); }
+    }
+    closeLockerModal();
+    toast('占用进程已结束，可重新扫描清理');
+  };
+}
+
+function closeLockerModal() {
+  const scrim = $('#modal');
+  scrim.classList.remove('top');
+  delete scrim.dataset.mode;
+  show(scrim, false);
+  $('#modal-ok').onclick = null;
+  $('#modal-ok').className = 'btn btn-danger';
+  $('#modal-ok').textContent = '确认清理';
+  $('#modal-text').textContent = '';
+  show($('#modal-cancel'), true);
+  const btnKill = $('#btn-kill-locker');
+  if (btnKill) { btnKill.onclick = null; btnKill.remove(); }
+}
 
 function renderChart() {
   const map = {};
@@ -374,6 +482,7 @@ async function refreshDismInfo() {
   if (!info.available) {
     $('#dism-status').textContent = 'dism.exe 不可用（可能被安全策略禁用）';
     $('#btn-dism-analyze').disabled = true;
+    $('#btn-dism-repair').disabled = true;
     $('#btn-dism-clean').disabled = true;
     return;
   }
@@ -406,6 +515,7 @@ function renderDismReport(r) {
 function setDismBusy(on, label) {
   dismBusy = on;
   $('#btn-dism-analyze').disabled = on;
+  $('#btn-dism-repair').disabled = on;
   $('#btn-dism-clean').disabled = on;
   const bar = $('#dism-progress');
   show(bar, on);
@@ -436,10 +546,23 @@ $('#btn-dism-clean').onclick = async () => {
   if (err) toast(err);
 };
 
+$('#btn-dism-repair').onclick = async () => {
+  if (dismBusy) { toast('已有组件存储任务进行中'); return; }
+  const ok = await confirmModal(
+    '修复组件存储将以管理员身份执行 DISM RestoreHealth（最长约 30 分钟，从 Windows Update 拉取修复源），期间请勿关闭本程序。适用于清理反复报「拒绝访问」的情况。确认执行？',
+    '修复组件存储');
+  if (!ok) return;
+  const err = await call('StartComponentRepair');
+  if (err) toast(err);
+};
+
 window.runtime.EventsOn('dism:progress', (p) => {
   if (!p.running && !p.done) return;
   if (p.running) {
-    setDismBusy(true, p.kind === 'analyze' ? '正在分析组件存储…' : '正在清理组件存储…');
+    const kindLabel = p.kind === 'analyze' ? '正在分析组件存储…'
+      : p.kind === 'repair' ? '正在修复组件存储…'
+      : '正在清理组件存储…';
+    setDismBusy(true, kindLabel);
     if (p.pct > 0) {
       $('#dism-progress-fill').classList.remove('indeterminate');
       $('#dism-progress-fill').style.width = p.pct.toFixed(1) + '%';
@@ -506,16 +629,146 @@ $('#btn-add-exclude').onclick = async () => {
 
 /* ── 清理历史 ───────────────────────────────────────────────────────── */
 
+// 从路径推断分类标签
+function inferCategory(path) {
+  const p = path.toLowerCase();
+  const rules = [
+    // AI / 开发工具
+    [/workbuddy|trae|codebuddy|codex|cursor|cline|windsurf|aider|devika|swe-agent|open.?debate/i, 'AI 工具'],
+    [/通义灵码|tongyi|lingma|doubao|豆包/i, 'AI 工具'],
+    [/claude|gpt|chatgpt|openai|copilot/i, 'AI 工具'],
+    [/vscode|code.*extension|cachedextension|code.?cache/i, 'IDE'],
+    [/intellij|jetbrains|idea|webstorm|pycharm/i, 'IDE'],
+    // 浏览器
+    [/chrome|google/i, '浏览器'],
+    [/edge|microsoft.*edg/i, '浏览器'],
+    [/firefox|mozilla/i, '浏览器'],
+    // IM / 社交
+    [/微信|wechat|xwechat|weixin/i, '微信'],
+    [/qq|tencent.*qq/i, 'QQ'],
+    [/telegram/i, 'Telegram'],
+    [/discord/i, 'Discord'],
+    // 包管理器 / 语言运行时
+    [/npm-cache|yarn[/\\]cache|pnpm-store|uv[/\\]cache|go[/\\]pkg[/\\]mod/i, '包管理器'],
+    [/node_modules|\.nuget|\.gradle|\.m2|\.cargo/i, '包管理器'],
+    // 系统级
+    [/windows[/\\]upgrade|windows10upgrade|win[sx]s/i, '系统升级'],
+    [/packages[/\\].*localcache|component_crx_cache/i, '系统组件'],
+    [/nvidia|amd[/\\]vkcache|dxcache|glcache|shader/i, '显卡着色器'],
+    // 下载/网盘
+    [/baidunetdisk|adrive|aliyundrive|115[/\\]cache/i, '网盘'],
+    // 其他应用
+    [/postman|insomnia/i, 'API 工具'],
+    [/electron|code.?cache|gpucache|dawn|blob_storage|crashpad/i, 'Electron'],
+  ];
+  for (const [re, label] of rules) {
+    if (re.test(p)) return label;
+  }
+  // 注册表项（HKEY_ 开头）
+  if (/^hkey_|^hk[clm]_/i.test(p)) return '注册表';
+  return '其他';
+}
+
+// 分类标签颜色
+const catColors = {
+  'AI 工具':  '#8b5cf6',
+  'IDE':      '#6366f1',
+  '浏览器':   '#3b82f6',
+  '微信':     '#22c55e',
+  'QQ':       '#06b6d4',
+  'Telegram': '#0ea5e9',
+  'Discord':  '#5865f2',
+  '包管理器': '#f59e0b',
+  '系统升级': '#ef4444',
+  '系统组件': '#f97316',
+  '显卡着色器': '#ec4899',
+  '网盘':     '#14b8a6',
+  'API 工具': '#a855f7',
+  'Electron': '#64748b',
+  '注册表':   '#dc2626',
+  '其他':     '#94a3b8',
+};
+
+function catBadge(cat) {
+  const c = catColors[cat] || '#94a3b8';
+  return `<span class="hist-cat" style="--cat-c:${c}">${esc(cat)}</span>`;
+}
+
 async function refreshHistory() {
   const h = await call('GetHistory');
-  $('#history-body').innerHTML = (h && h.length)
-    ? h.map((r) => `<tr><td>${esc(r.time)}</td><td>${fmtSize(r.size)}</td><td title="${esc(r.path)}">${esc(r.path)}</td></tr>`).join('')
-    : '<tr><td colspan="3" class="empty">（暂无记录）</td></tr>';
+  const container = $('#history-groups');
+  if (!container) return;
+  if (!h || !h.length) {
+    container.innerHTML = '';
+    toggleEmpty($('#empty-history'), true);
+    return;
+  }
+  toggleEmpty($('#empty-history'), false);
+
+  // 按时间分组（同一秒的记录归为一次清理批次）
+  const groups = [];
+  let cur = null;
+  for (const r of h) {
+    if (!cur || cur.time !== r.time) {
+      cur = { time: r.time, items: [], total: 0, cats: {} };
+      groups.push(cur);
+    }
+    cur.items.push(r);
+    cur.total += r.size;
+    const cat = inferCategory(r.path);
+    cur.cats[cat] = (cur.cats[cat] || 0) + r.size;
+  }
+
+  // 渲染（最新的在前）
+  container.innerHTML = groups.reverse().map((g, gi) => {
+    // 分类汇总条
+    const catSummary = Object.entries(g.cats)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat, size]) => `${catBadge(cat)} ${fmtSize(size)}`)
+      .join(' ');
+
+    return `<div class="hist-group" data-gi="${gi}">` +
+      `<button class="hist-header" aria-expanded="false" aria-label="展开清理批次 ${esc(g.time)}">` +
+        `<span class="hist-time">${esc(g.time)}</span>` +
+        `<span class="hist-summary">${fmtSize(g.total)} · ${g.items.length} 项</span>` +
+        `<span class="hist-cats">${catSummary}</span>` +
+        `<svg class="icon hist-arrow"><use href="#i-scan"/></svg>` +
+      `</button>` +
+      `<div class="hist-detail" hidden>` +
+        `<table class="hist"><tbody>` +
+        g.items.map((r) => {
+          const cat = inferCategory(r.path);
+          return `<tr><td>${catBadge(cat)}</td><td>${fmtSize(r.size)}</td><td title="${esc(r.path)}">${esc(r.path)}</td></tr>`;
+        }).join('') +
+        `</tbody></table>` +
+      `</div>` +
+    `</div>`;
+  }).join('');
+
+  // 绑定展开/?收起
+  container.querySelectorAll('.hist-header').forEach((btn) => {
+    btn.onclick = () => {
+      const detail = btn.nextElementSibling;
+      const expanded = !detail.hidden;
+      detail.hidden = expanded;
+      btn.setAttribute('aria-expanded', !expanded);
+      btn.classList.toggle('is-open', !expanded);
+    };
+  });
 }
 
 /* ── 关于 ───────────────────────────────────────────────────────────── */
 
-$('#btn-about').onclick = () => { lastFocused = document.activeElement; show($('#about'), true); $('#about-close').focus(); };
+$('#btn-about').onclick = () => {
+  lastFocused = document.activeElement;
+  show($('#about'), true);
+  // 填充真实版本号（后端注入）
+  call('GetVersion').then((v) => {
+    const el = $('#about-version');
+    if (el && v) el.textContent = v;
+  }).catch(() => {});
+  $('#about-close').focus();
+};
 $('#about-close').onclick = () => {
   show($('#about'), false);
   if (lastFocused && lastFocused.focus) lastFocused.focus();

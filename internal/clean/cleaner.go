@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"cachecleaner/internal/config"
@@ -60,7 +61,13 @@ func Clean(entries []model.CacheEntry, cfg *config.Config, progress ProgressFunc
 			continue
 		}
 		if err := os.RemoveAll(e.Path); err != nil {
-			failed = append(failed, e.Path+": "+err.Error())
+			msg := err.Error()
+			// Windows 上"Access is denied"多半是文件正被运行中的程序占用（共享冲突），
+			// 把提示翻译成用户能懂的指引，而不是原样抛英文错误码。
+			if strings.Contains(msg, "Access is denied") || strings.Contains(msg, "denied") {
+				msg += "（文件可能正被运行中的程序占用，退出对应软件后重试）"
+			}
+			failed = append(failed, e.Path+": "+msg)
 			continue
 		}
 		freed += e.Size

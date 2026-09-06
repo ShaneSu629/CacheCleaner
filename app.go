@@ -12,6 +12,7 @@ import (
 	"cachecleaner/internal/clean"
 	"cachecleaner/internal/config"
 	"cachecleaner/internal/dismclean"
+	"cachecleaner/internal/filelock"
 	"cachecleaner/internal/model"
 	"cachecleaner/internal/regclean"
 	"cachecleaner/internal/scan"
@@ -43,6 +44,14 @@ type HistoryDTO struct {
 type CleanFailure struct {
 	Path  string `json:"path"`
 	Error string `json:"error"`
+}
+
+// LockerDTO 是占用文件的进程信息（传给前端展示）。
+type LockerDTO struct {
+	Pid  uint32 `json:"pid"`
+	Name string `json:"name"`
+	Path string `json:"path"`
+	Safe bool   `json:"safe"`
 }
 
 // CleanResult 是清理结果。Cleaned 为成功清理的路径，前端据此移除列表项；
@@ -309,6 +318,43 @@ func splitFailure(msg string) CleanFailure {
 		return CleanFailure{Path: msg[:i], Error: msg[i+len(sep):]}
 	}
 	return CleanFailure{Path: msg, Error: msg}
+}
+
+// ── 文件占用进程（Restart Manager）──
+
+// FindLockers 查找占用指定路径的进程（前端清理失败后调用，告诉用户"谁占着"）。
+// 返回按进程名排序去重的列表；查不到或无权限时返回空。
+func (a *App) FindLockers(paths []string) []LockerDTO {
+	lockers := filelock.FindLockers(paths)
+	out := make([]LockerDTO, 0, len(lockers))
+	for _, l := range lockers {
+		out = append(out, LockerDTO{Pid: l.Pid, Name: l.Name, Path: l.Path, Safe: l.Safe})
+	}
+	applog.Info("占用查询: %d 个路径 -> %d 个进程", len(paths), len(out))
+	return out
+}
+
+// KillProcess 强制结束占用文件的进程。安全校验：
+// 用 paths 重新查出占用名单，目标 pid 必须真实出现在名单中且 Safe=true
+// （服务/系统关键进程由后端判定拒绝），防止前端传任意 pid 乱杀进程。
+// 返回空串表示成功，否则为错误信息。
+func (a *App) KillProcess(paths []string, pid uint32) string {
+	lockers := filelock.FindLockers(paths)
+	for _, l := range lockers {
+		if l.Pid != pid {
+			continue
+		}
+		if !l.Safe {
+			return "该进程为系统关键进程，已拒绝结束"
+		}
+		if err := filelock.Kill(pid); err != nil {
+			applog.Error("结束进程 %s(pid=%d) 失败: %v", l.Name, pid, err)
+			return "结束进程失败: " + err.Error()
+		}
+		applog.Info("已结束占用进程 %s (pid=%d)", l.Name, pid)
+		return ""
+	}
+	return "该进程未占用所选路径，已拒绝结束"
 }
 
 // ── 自定义目录 / 排除目录（全部在锁内读写，避免与扫描 goroutine 数据竞争）──
@@ -583,6 +629,19 @@ func (a *App) StartComponentCleanup() string {
 		return err.Error()
 	}
 	a.watchDismJob("cleanup")
+	return ""
+}
+
+// StartComponentRepair 启动组件存储修复（RestoreHealth）。
+// 针对"清理反复报 0x80070005 / STATUS_CANNOT_DELETE"的组件存储不一致场景。
+// 返回空串表示已启动（进度经 dism:progress 事件推送），否则为错误信息。
+func (a *App) StartComponentRepair() string {
+	applog.Info("DISM: 请求启动组件存储修复 (elevated=%v)", dismclean.IsElevated())
+	if err := dismclean.StartRepair(); err != nil {
+		applog.Error("DISM: 修复启动失败: %v", err)
+		return err.Error()
+	}
+	a.watchDismJob("repair")
 	return ""
 }
 

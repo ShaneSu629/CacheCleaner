@@ -142,7 +142,7 @@ func TestValueAfterColon(t *testing.T) {
 // 历史 bug："echo 0>file" 中 0> 被 cmd 解析成重定向句柄 0，done 文件
 // 内容变成垃圾，DISM 成功却被误判为失败。
 func TestBuildJobCommand(t *testing.T) {
-	cmd := buildJobCommand("/Online /Cleanup-Image /AnalyzeComponentStore", `C:\t\out.txt`, `C:\t\done.txt`)
+	cmd := buildJobCommand("/Online /Cleanup-Image /AnalyzeComponentStore", `C:\t\out.txt`, `C:\t\done.txt`, false)
 	if strings.Contains(cmd, "echo 0>") || strings.Contains(cmd, "echo 1>") {
 		t.Errorf("echo 与 > 之间缺少空格会被 cmd 解析成句柄重定向: %s", cmd)
 	}
@@ -151,5 +151,32 @@ func TestBuildJobCommand(t *testing.T) {
 	}
 	if !strings.Contains(cmd, `>"C:\t\out.txt" 2>&1`) {
 		t.Errorf("输出重定向不正确: %s", cmd)
+	}
+	// analyze 不应含 TrustedInstaller / wuauserv
+	if strings.Contains(cmd, "TrustedInstaller") || strings.Contains(cmd, "wuauserv") {
+		t.Errorf("analyze 不应含服务操作: %s", cmd)
+	}
+
+	// cleanup 需要 TrustedInstaller + 暂停/恢复 Windows Update
+	cmd2 := buildJobCommand("/Online /Cleanup-Image /StartComponentCleanup", `C:\t\out.txt`, `C:\t\done.txt`, true)
+	if !strings.Contains(cmd2, `sc stop wuauserv`) {
+		t.Errorf("cleanup 应含 sc stop wuauserv: %s", cmd2)
+	}
+	if !strings.Contains(cmd2, `sc start TrustedInstaller`) {
+		t.Errorf("cleanup 应含 sc start TrustedInstaller: %s", cmd2)
+	}
+	if !strings.Contains(cmd2, `sc start wuauserv`) {
+		t.Errorf("cleanup 结束后应恢复 wuauserv: %s", cmd2)
+	}
+	// 服务操作必须在 dism 之前
+	stopIdx := strings.Index(cmd2, "sc stop wuauserv")
+	dismIdx := strings.Index(cmd2, "dism")
+	if stopIdx >= dismIdx || stopIdx < 0 {
+		t.Errorf("sc stop 应在 dism 之前: %s", cmd2)
+	}
+	// 恢复 wuauserv 必须在 dism 之后
+	startIdx := strings.Index(cmd2, "sc start wuauserv")
+	if startIdx < dismIdx {
+		t.Errorf("sc start wuauserv 应在 dism 之后: %s", cmd2)
 	}
 }

@@ -16,6 +16,8 @@ export function CleanSelected(arg1:Array<string>):Promise<main.CleanResult>;
 
 export function ClearUpdateSkip():Promise<void>;
 
+export function FindLockers(arg1:Array<string>):Promise<Array<main.LockerDTO>>;
+
 export function GetCustomDirs():Promise<Array<string>>;
 
 export function GetDismInfo():Promise<main.DismInfoDTO>;
@@ -25,6 +27,8 @@ export function GetExcludeDirs():Promise<Array<string>>;
 export function GetHistory():Promise<Array<main.HistoryDTO>>;
 
 export function GetVersion():Promise<string>;
+
+export function KillProcess(arg1:Array<string>,arg2:number):Promise<string>;
 
 export function LogFrontend(arg1:string):Promise<void>;
 
@@ -43,3 +47,5 @@ export function SkipUpdate(arg1:string):Promise<void>;
 export function SnoozeUpdate(arg1:number):Promise<void>;
 
 export function StartComponentCleanup():Promise<string>;
+
+export function StartComponentRepair():Promise<string>;

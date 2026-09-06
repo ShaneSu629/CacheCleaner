@@ -2,6 +2,7 @@ package main
 
 import (
 	"cachecleaner/internal/applog"
+	"cachecleaner/internal/singleflight"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -21,6 +22,12 @@ func (wailsLogAdapter) Error(m string)   { applog.Error("wails: " + m) }
 func (wailsLogAdapter) Fatal(m string)   { applog.Error("wails[fatal]: " + m) }
 
 func main() {
+	// 单实例：重复双击时静默定位已运行的窗口，恢复并前置到前台，本进程直接退出。
+	// 必须在日志初始化之前：第二个实例根本不配写日志（避免两个进程争抢日志文件）。
+	if !singleflight.Acquire("CacheCleaner", "智能缓存清理工具") {
+		return
+	}
+
 	// 落盘日志必须最先初始化：后续任何报错（含启动失败）才有据可查。
 	logPath := applog.Init()
 	defer applog.Close()

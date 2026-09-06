@@ -131,8 +131,21 @@ jobs:
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - name: Build GUI
-        run: wails build -skipbindings
+      - name: Extract version from tag
+        id: version
+        shell: pwsh
+        run: |
+          # 打 tag 时用 tag 名（v1.2.0），手动触发时用 commit 短哈希
+          if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') {
+            $ver = "v" + $Matches[1]
+          } else {
+            $ver = "dev-" + $env:GITHUB_SHA.Substring(0, 7)
+          }
+          Write-Output "VERSION=$ver"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$ver"
+
+      - name: Build GUI (version injected)
+        run: wails build -skipbindings -ldflags "-X cachecleaner/internal/update.version=${{ steps.version.outputs.version }}"
 
       - name: Rename output
         shell: pwsh
