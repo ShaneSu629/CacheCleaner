@@ -343,38 +343,36 @@ func ApplyAndRestart() error {
 	bat := filepath.Join(os.TempDir(), "cachecleaner_update.bat")
 	logFile := filepath.Join(os.TempDir(), "cachecleaner_update.log")
 	oldExe := filepath.Join(filepath.Dir(exe), "CacheCleaner.old.exe")
-	// 注意：bat 必须是纯 ASCII（Go WriteFile 写 UTF-8，cmd 默认按 GBK 解析，
-	// 中文注释会被当乱码可能吞掉换行导致命令粘连卡死——历史上真踩过）。
+	// 注意：
+	//  1. bat 必须是纯 ASCII（cmd 默认按 GBK 解析，中文会吞换行导致命令粘连）
+	//  2. 不依赖 tasklist/find 等外部命令——部分环境（安全策略）会拦截外部
+	//     命令导致 bat 静默挂死。改用 ren 重试法：ren 失败=进程还在运行，
+	//     成功即可替换，全部只用 cmd 内置命令。
 	content := strings.Join([]string{
 		"@echo off",
 		"setlocal",
 		"rem CacheCleaner self-update script (log: " + logFile + ")",
-		"echo [%date% %time%] update bat started >> \"" + logFile + "\"",
+		"cd /d \"" + filepath.Dir(exe) + "\"",
+		"echo [%date% %time%] bat started >> \"" + logFile + "\"",
 		"echo [%date% %time%] target=" + exe + " >> \"" + logFile + "\"",
-		"rem wait for app exit (max 30s, for /l avoids delayed expansion pitfall)",
-		"for /l %%i in (1,1,30) do (",
-		"  tasklist /FI \"IMAGENAME eq " + filepath.Base(exe) + "\" 2>nul | find /I \"" + filepath.Base(exe) + "\" >nul",
-		"  if errorlevel 1 goto replace",
+		"rem wait 4s for app to fully exit (Quit is async)",
+		"ping 127.0.0.1 -n 5 >nul",
+		"rem try rename with retry: ren fails while exe still locked",
+		"for /l %%i in (1,1,40) do (",
+		"  ren \"" + filepath.Base(exe) + "\" \"CacheCleaner.old.exe\" 2>nul",
+		"  if not errorlevel 1 goto renamed",
 		"  ping 127.0.0.1 -n 2 >nul",
 		")",
-		"echo [%date% %time%] timeout waiting exit >> \"" + logFile + "\"",
+		"echo [%date% %time%] rename timeout >> \"" + logFile + "\"",
 		"exit /b 1",
-		":replace",
-		"echo [%date% %time%] process exited, renaming >> \"" + logFile + "\"",
-		"del /Q \"" + oldExe + "\" >nul 2>&1",
-		"ren \"" + exe + "\" \"CacheCleaner.old.exe\"",
-		"if errorlevel 1 goto fail",
+		":renamed",
 		"echo [%date% %time%] renamed ok, copying >> \"" + logFile + "\"",
-		"rem copy retry x3 (antivirus may briefly lock file); no var counting to avoid delayed expansion",
 		"copy /Y \"" + newPath + "\" \"" + exe + "\" >nul",
 		"if not errorlevel 1 goto copyok",
 		"ping 127.0.0.1 -n 2 >nul",
 		"copy /Y \"" + newPath + "\" \"" + exe + "\" >nul",
 		"if not errorlevel 1 goto copyok",
-		"ping 127.0.0.1 -n 3 >nul",
-		"copy /Y \"" + newPath + "\" \"" + exe + "\" >nul",
-		"if not errorlevel 1 goto copyok",
-		"echo [%date% %time%] copy failed after retries >> \"" + logFile + "\"",
+		"echo [%date% %time%] copy failed >> \"" + logFile + "\"",
 		"goto fail",
 		":copyok",
 		"echo [%date% %time%] copied ok, cleanup >> \"" + logFile + "\"",
