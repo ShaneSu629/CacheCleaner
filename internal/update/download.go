@@ -345,7 +345,8 @@ func ApplyAndRestart() error {
 		":waitloop",
 		"tasklist /FI \"IMAGENAME eq " + filepath.Base(exe) + "\" 2>nul | find /I \"" + filepath.Base(exe) + "\" >nul",
 		"if errorlevel 1 goto replace",
-		"timeout /t 1 /nobreak >nul",
+		"rem timeout 命令在某些精简系统不可用，用 ping 做 1 秒延时",
+		"ping 127.0.0.1 -n 2 >nul",
 		"set /a tries+=1",
 		"if %tries% lss 60 goto waitloop",
 		"rem 超时放弃",
@@ -372,12 +373,13 @@ func ApplyAndRestart() error {
 		return err
 	}
 
-	// 启动替换脚本（独立进程，父进程退出后继续运行）
-	// 用 CreateProcess 原样传参避免转义问题
-	return runDetached("cmd.exe", "/c \""+bat+"\"")
+	// 启动替换脚本（独立进程，父进程退出后继续运行）。
+	// CreateProcess 的 lpApplicationName 传 nil 会按第一个 token 解析，
+	// 因此可执行文件名必须拼在命令行最前面。
+	return runDetached("cmd.exe /c \"" + bat + "\"")
 }
 
 // runDetached 用 CreateProcess 启动独立进程（本函数在平台专用文件中实现）。
-func runDetached(exe, args string) error {
-	return startDetached(exe, args)
+func runDetached(cmdline string) error {
+	return startDetached(cmdline)
 }
