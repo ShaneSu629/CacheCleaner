@@ -10,6 +10,14 @@ export function AddExcludeDir(arg1) {
   return window['go']['main']['App']['AddExcludeDir'](arg1);
 }
 
+export function AnalyzeComponentStore() {
+  return window['go']['main']['App']['AnalyzeComponentStore']();
+}
+
+export function CheckUpdate(arg1) {
+  return window['go']['main']['App']['CheckUpdate'](arg1);
+}
+
 export function CleanRegistry(arg1) {
   return window['go']['main']['App']['CleanRegistry'](arg1);
 }
@@ -18,8 +26,16 @@ export function CleanSelected(arg1) {
   return window['go']['main']['App']['CleanSelected'](arg1);
 }
 
+export function ClearUpdateSkip() {
+  return window['go']['main']['App']['ClearUpdateSkip']();
+}
+
 export function GetCustomDirs() {
   return window['go']['main']['App']['GetCustomDirs']();
+}
+
+export function GetDismInfo() {
+  return window['go']['main']['App']['GetDismInfo']();
 }
 
 export function GetExcludeDirs() {
@@ -28,6 +44,18 @@ export function GetExcludeDirs() {
 
 export function GetHistory() {
   return window['go']['main']['App']['GetHistory']();
+}
+
+export function GetVersion() {
+  return window['go']['main']['App']['GetVersion']();
+}
+
+export function LogFrontend(arg1) {
+  return window['go']['main']['App']['LogFrontend'](arg1);
+}
+
+export function OpenDownloadPage(arg1) {
+  return window['go']['main']['App']['OpenDownloadPage'](arg1);
 }
 
 export function RemoveCustomDir(arg1) {
@@ -44,4 +72,16 @@ export function Scan(arg1) {
 
 export function ScanRegistry() {
   return window['go']['main']['App']['ScanRegistry']();
+}
+
+export function SkipUpdate(arg1) {
+  return window['go']['main']['App']['SkipUpdate'](arg1);
+}
+
+export function SnoozeUpdate(arg1) {
+  return window['go']['main']['App']['SnoozeUpdate'](arg1);
+}
+
+export function StartComponentCleanup() {
+  return window['go']['main']['App']['StartComponentCleanup']();
 }

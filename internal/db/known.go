@@ -107,8 +107,10 @@ func knownWindows() []knownDef {
 		{"windows", config.BaseRoaming, "Trae CN/logs", "AI缓存", model.RiskSafe, "Trae AI 日志"},
 		// WorkBuddy / CodeBuddy
 		{"windows", config.BaseLocal, "@genieworkbuddy-desktop-updater", "AI缓存", model.RiskSafe, "WorkBuddy 桌面更新器缓存"},
-		{"windows", config.BaseLocal, "WorkBuddy", "AI缓存", model.RiskCaution, "WorkBuddy 本地运行时"},
-		{"windows", config.BaseLocal, "CodeBuddyExtension/Data", "AI缓存", model.RiskCaution, "CodeBuddy 扩展数据"},
+		{"windows", config.BaseLocal, "WorkBuddy", "AI缓存", model.RiskCaution, "WorkBuddy 本地运行时(仅日志时安全,清理前请展开确认)"},
+		// ⚠️ CodeBuddyExtension\Data 下含 Public\auth（登录凭据）。
+		//    曾标 Caution 导致用户清理后登录态丢失、需重新登录，故降为 Review（默认不勾、需人工复核）。
+		{"windows", config.BaseLocal, "CodeBuddyExtension/Data", "AI缓存", model.RiskReview, "CodeBuddy 扩展数据(含 auth 登录凭据,清理会导致重新登录)"},
 		// Claude Desktop（Windows）
 		{"windows", config.BaseRoaming, "Claude/Cache", "AI缓存", model.RiskSafe, "Claude 桌面版缓存"},
 		{"windows", config.BaseRoaming, "Claude/CachedData", "AI缓存", model.RiskSafe, "Claude 桌面版缓存数据"},
@@ -228,6 +230,50 @@ func knownWindows() []knownDef {
 		{"windows", config.BaseLocal, "D3DSCache", "系统空间回收", model.RiskSafe, "DirectX 着色器缓存(游戏/图形程序自动重建)"},
 		{"windows", config.BaseSystemDrive, "$RECYCLE.BIN", "系统空间回收", model.RiskCaution, "回收站(删除后无法找回其中文件,系统盘)"},
 		{"windows", config.BaseSystemDrive, "Windows.old", "系统空间回收", model.RiskReview, "旧系统备份(删除后无法回退到升级前的 Windows)"},
+
+		// ── MSIX / UWP 商店应用缓存 ──
+		// 本机取证：MS Teams 的 LocalCache 达 890MB，此前完全漏扫。
+		// MSIX 应用统一把缓存写在 Local\Packages\<包名>\LocalCache（微软规定的标准位置），
+		// 用 "*" 段覆盖全部已装商店应用；不存在的子目录由 expandPath 自动跳过，
+		// 体积为 0 的由 BuildKnownCaches 过滤，因此不会刷出一堆空条目。
+		// LocalCache 可能含应用登录态缓存，故标 Caution 而非 Safe。
+		{"windows", config.BaseLocal, "Packages/*/LocalCache", "MSIX应用缓存", model.RiskCaution, "Windows 商店应用缓存(如 MS Teams,清空后可能需重新登录)"},
+		{"windows", config.BaseLocal, "Packages/*/TempState", "MSIX应用缓存", model.RiskSafe, "Windows 商店应用临时状态"},
+		{"windows", config.BaseLocal, "Packages/*/AC/Temp", "MSIX应用缓存", model.RiskSafe, "Windows 商店应用 AC 临时目录"},
+
+		// ── 浏览器级组件/扩展更新缓存（位于 User Data 根，不在 profile 子目录下）──
+		// 本机取证：Edge component_crx_cache 368MB、Chrome 27.9MB，此前只覆盖 Default\Cache。
+		{"windows", config.BaseLocal, "Microsoft/Edge/User Data/component_crx_cache", "浏览器缓存", model.RiskSafe, "Edge 组件更新缓存(按需重新下载)"},
+		{"windows", config.BaseLocal, "Microsoft/Edge/User Data/extensions_crx_cache", "浏览器缓存", model.RiskSafe, "Edge 扩展更新缓存(按需重新下载)"},
+		{"windows", config.BaseLocal, "Google/Chrome/User Data/component_crx_cache", "浏览器缓存", model.RiskSafe, "Chrome 组件更新缓存(按需重新下载)"},
+		{"windows", config.BaseLocal, "Google/Chrome/User Data/extensions_crx_cache", "浏览器缓存", model.RiskSafe, "Chrome 扩展更新缓存(按需重新下载)"},
+
+		// ── 显卡着色器缓存（删除后程序自动重建，不影响设置与登录态）──
+		// 本机取证：AMD VkCache 217MB。
+		{"windows", config.BaseLocal, "AMD/VkCache", "着色器缓存", model.RiskSafe, "AMD Vulkan 着色器缓存(自动重建)"},
+		{"windows", config.BaseLocal, "AMD/DxCache", "着色器缓存", model.RiskSafe, "AMD DirectX 着色器缓存(自动重建)"},
+		{"windows", config.BaseLocal, "NVIDIA/DXCache", "着色器缓存", model.RiskSafe, "NVIDIA DirectX 着色器缓存(自动重建)"},
+		{"windows", config.BaseLocal, "NVIDIA/GLCache", "着色器缓存", model.RiskSafe, "NVIDIA OpenGL 着色器缓存(自动重建)"},
+		{"windows", config.BaseLocalLow, "NVIDIA/PerDriverVersion/DXCache", "着色器缓存", model.RiskSafe, "NVIDIA 驱动级 DX 着色器缓存(自动重建)"},
+		{"windows", config.BaseLocalLow, "AMD/DxCache", "着色器缓存", model.RiskSafe, "AMD 驱动级 DX 着色器缓存(自动重建)"},
+
+		// ── 包管理器 / 开发工具缓存（可重新下载，重建消耗带宽，故标 Caution）──
+		// 本机取证：npm-cache 228.8MB、go mod cache 139.4MB、~/.cache 163MB。
+		{"windows", config.BaseLocal, "npm-cache", "开发工具缓存", model.RiskCaution, "npm 包缓存(清理后重新下载)"},
+		{"windows", config.BaseLocal, "Yarn/Cache", "开发工具缓存", model.RiskCaution, "Yarn 包缓存(清理后重新下载)"},
+		{"windows", config.BaseLocal, "pnpm-store", "开发工具缓存", model.RiskCaution, "pnpm 存储(清理后重新下载)"},
+		{"windows", config.BaseLocal, "uv/cache", "开发工具缓存", model.RiskCaution, "uv 包缓存(清理后重新下载)"},
+		{"windows", config.BaseHome, "go/pkg/mod/cache", "开发工具缓存", model.RiskCaution, "Go 模块缓存(清理后重新下载)"},
+		// 以下为跨平台通用位置（Windows 亦常见），归入 knownCrossPlatform 见下。
+
+		// ── 微信文件目录中的纯缓存子目录 ──
+		// ⚠️ xwechat_files 整体含聊天文件/图片/数据库（msg/ db_storage/ old_backup/），
+		//    绝不可整目录清理；这里只取明确可重建的 cache / temp 子目录。
+		// "*" 匹配账号目录（如 woshiet_3828_bc4a）。本机取证：cache 子目录 241.8MB。
+		{"windows", config.BaseHome, "xwechat_files/*/cache", "社交缓存(微信)", model.RiskSafe, "微信文件目录缓存(不影响聊天记录)"},
+		{"windows", config.BaseHome, "xwechat_files/*/temp", "社交缓存(微信)", model.RiskSafe, "微信文件目录临时文件"},
+		{"windows", config.BaseDocuments, "xwechat_files/*/cache", "社交缓存(微信)", model.RiskSafe, "微信文件目录缓存(不影响聊天记录)"},
+		{"windows", config.BaseDocuments, "xwechat_files/*/temp", "社交缓存(微信)", model.RiskSafe, "微信文件目录临时文件"},
 	}
 }
 
@@ -318,12 +364,16 @@ func knownCrossPlatform() []knownDef {
 		{"all", config.BaseHome, ".workbuddy/tmp", "AI缓存", model.RiskSafe, "WorkBuddy 临时文件"},
 		{"all", config.BaseHome, ".workbuddy/logs", "AI缓存", model.RiskSafe, "WorkBuddy 日志"},
 		{"all", config.BaseHome, ".workbuddy/traces", "AI缓存", model.RiskSafe, "WorkBuddy 跟踪数据"},
-		{"all", config.BaseHome, ".workbuddy/plugins", "AI缓存", model.RiskSafe, "WorkBuddy 插件缓存"},
+		// ⚠️ plugins 下可能含连接器凭据/API Key，不能当作纯缓存（曾误标 Safe）。
+		{"all", config.BaseHome, ".workbuddy/plugins", "AI缓存", model.RiskCaution, "WorkBuddy 插件(可能含连接器凭据,清理后需重新授权)"},
 		{"all", config.BaseHome, ".workbuddy/binaries", "AI缓存", model.RiskCaution, "WorkBuddy 运行时(清理后重新下载)"},
 		{"all", config.BaseHome, ".workbuddy/projects", "AI缓存", model.RiskReview, "WorkBuddy 项目上下文(可能导致输出不准)"},
 		{"all", config.BaseHome, ".workbuddy/sessions", "AI缓存", model.RiskReview, "WorkBuddy 会话上下文"},
 		{"all", config.BaseHome, ".workbuddy/tasks", "AI缓存", model.RiskReview, "WorkBuddy 任务上下文"},
-		{"all", config.BaseHome, "WorkBuddy", "AI缓存", model.RiskCaution, "WorkBuddy 根目录"},
+		// ⚠️ WorkBuddy 根目录下有 workbuddy.db、user-state.json、device-id、settings.json
+		//    等身份与配置数据（以及 app\session 登录会话），整目录清理会丢登录态与配置。
+		//    故降为 Review，默认不勾选。真正安全的只有 logs / tmp / traces 等子目录。
+		{"all", config.BaseHome, "WorkBuddy", "AI缓存", model.RiskReview, "WorkBuddy 根目录(含登录态与配置,清理会导致重新登录)"},
 		// Codeium / Windsurf
 		{"all", config.BaseHome, ".codeium/windsurf", "AI缓存", model.RiskCaution, "Windsurf/Codeium 会话与记忆"},
 		// 通义灵码 / Qoder
@@ -347,6 +397,13 @@ func knownCrossPlatform() []knownDef {
 		{"all", config.BaseHome, ".lmstudio", "AI模型", model.RiskReview, "LM Studio 数据"},
 		// Hugging Face
 		{"all", config.BaseLocal, "huggingface", "AI模型", model.RiskCaution, "HuggingFace 模型缓存(重建费带宽)"},
+		// ── 通用开发工具缓存（三系统路径一致，重建需重新下载故标 Caution）──
+		// 本机取证：Windows ~/.cache 163MB。
+		{"all", config.BaseHome, ".cache", "开发工具缓存", model.RiskCaution, "用户级通用缓存目录(清理后按需重新下载)"},
+		{"all", config.BaseHome, ".nuget/packages", "开发工具缓存", model.RiskCaution, "NuGet 包缓存(清理后重新下载)"},
+		{"all", config.BaseHome, ".gradle/caches", "开发工具缓存", model.RiskCaution, "Gradle 构建缓存(清理后重新下载/重建)"},
+		{"all", config.BaseHome, ".m2/repository", "开发工具缓存", model.RiskCaution, "Maven 本地仓库(清理后重新下载)"},
+		{"all", config.BaseHome, ".cargo/registry", "开发工具缓存", model.RiskCaution, "Cargo 注册表缓存(清理后重新下载)"},
 		// Kimi / DeepSeek 会话
 		{"all", config.BaseHome, ".kimi/sessions", "AI缓存", model.RiskCaution, "Kimi 会话历史"},
 		{"all", config.BaseHome, ".deepseek/sessions", "AI缓存", model.RiskCaution, "DeepSeek 会话历史"},

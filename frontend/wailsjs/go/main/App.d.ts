@@ -6,15 +6,29 @@ export function AddCustomDir(arg1:string):Promise<void>;
 
 export function AddExcludeDir(arg1:string):Promise<void>;
 
+export function AnalyzeComponentStore():Promise<string>;
+
+export function CheckUpdate(arg1:boolean):Promise<main.UpdateInfoDTO>;
+
 export function CleanRegistry(arg1:Array<string>):Promise<main.CleanResult>;
 
 export function CleanSelected(arg1:Array<string>):Promise<main.CleanResult>;
 
+export function ClearUpdateSkip():Promise<void>;
+
 export function GetCustomDirs():Promise<Array<string>>;
+
+export function GetDismInfo():Promise<main.DismInfoDTO>;
 
 export function GetExcludeDirs():Promise<Array<string>>;
 
 export function GetHistory():Promise<Array<main.HistoryDTO>>;
+
+export function GetVersion():Promise<string>;
+
+export function LogFrontend(arg1:string):Promise<void>;
+
+export function OpenDownloadPage(arg1:string):Promise<void>;
 
 export function RemoveCustomDir(arg1:string):Promise<void>;
 
@@ -23,3 +37,9 @@ export function RemoveExcludeDir(arg1:string):Promise<void>;
 export function Scan(arg1:string):Promise<void>;
 
 export function ScanRegistry():Promise<Array<main.RegEntryDTO>>;
+
+export function SkipUpdate(arg1:string):Promise<void>;
+
+export function SnoozeUpdate(arg1:number):Promise<void>;
+
+export function StartComponentCleanup():Promise<string>;

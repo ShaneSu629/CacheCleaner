@@ -15,6 +15,7 @@ import (
 	"cachecleaner/internal/model"
 	"cachecleaner/internal/regclean"
 	"cachecleaner/internal/scan"
+	"cachecleaner/internal/update"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -113,6 +114,21 @@ func (a *App) startup(ctx context.Context) {
 	a.mu.Unlock()
 	applog.Info("启动完成: OS=%s Home=%s Documents=%s Windows=%s",
 		cfg.OS, cfg.Home, cfg.Documents, cfg.Windows)
+
+	// 启动后延迟自动检查更新：走后台 goroutine，失败或处于静默期都不打扰用户。
+	// 前端收到 update:info 后自行决定是否弹窗（Snoozed/Skipped 时不弹）。
+	go func() {
+		time.Sleep(5 * time.Second)
+		info, err := update.Check(false)
+		if err != nil {
+			applog.Error("启动检查更新失败: %v", err)
+			return
+		}
+		if info.HasUpdate {
+			applog.Info("发现新版本: %s -> %s", info.Current, info.Latest)
+		}
+		a.emit("update:info", toUpdateDTO(info))
+	}()
 }
 
 func (a *App) domReady(ctx context.Context) {}
@@ -361,6 +377,91 @@ func (a *App) GetHistory() []HistoryDTO {
 		out = append(out, HistoryDTO{Time: r.Time, Path: r.Path, Size: r.Size})
 	}
 	return out
+}
+
+// ── 软件更新 ──
+
+// UpdateInfoDTO 是传给前端的更新信息（字段与 internal/update.Info 一一对应）。
+type UpdateInfoDTO struct {
+	Current     string `json:"current"`
+	Latest      string `json:"latest"`
+	HasUpdate   bool   `json:"hasUpdate"`
+	URL         string `json:"url"`
+	Notes       string `json:"notes"`
+	Size        int64  `json:"size"`
+	PublishedAt string `json:"publishedAt"`
+	FromCache   bool   `json:"fromCache"`
+	Snoozed     bool   `json:"snoozed"`
+	Skipped     bool   `json:"skipped"`
+}
+
+func toUpdateDTO(i *update.Info) UpdateInfoDTO {
+	if i == nil {
+		return UpdateInfoDTO{Current: update.CurrentVersion()}
+	}
+	return UpdateInfoDTO{
+		Current:     i.Current,
+		Latest:      i.Latest,
+		HasUpdate:   i.HasUpdate,
+		URL:         i.URL,
+		Notes:       i.Notes,
+		Size:        i.Size,
+		PublishedAt: i.PublishedAt,
+		FromCache:   i.FromCache,
+		Snoozed:     i.Snoozed,
+		Skipped:     i.Skipped,
+	}
+}
+
+// GetVersion 返回当前程序版本，供"关于"页面展示。
+func (a *App) GetVersion() string { return update.CurrentVersion() }
+
+// CheckUpdate 检查更新。force=true 为设置页手动点击（立即联网、忽略静默/跳过）；
+// force=false 为启动时的自动检查（受检查间隔与静默策略约束，失败也不打扰用户）。
+func (a *App) CheckUpdate(force bool) UpdateInfoDTO {
+	info, err := update.Check(force)
+	if err != nil {
+		applog.Error("检查更新失败: %v", err)
+	} else if info != nil && info.HasUpdate {
+		applog.Info("发现新版本: %s -> %s", info.Current, info.Latest)
+	}
+	return toUpdateDTO(info)
+}
+
+// SnoozeUpdate 推迟更新提醒 hours 小时（<=0 时按默认 24 小时）。
+func (a *App) SnoozeUpdate(hours int) {
+	if err := update.Snooze(time.Duration(hours) * time.Hour); err != nil {
+		applog.Error("推迟更新提醒失败: %v", err)
+	}
+}
+
+// SkipUpdate 跳过指定版本（空串表示跳过当前最新版本）。
+func (a *App) SkipUpdate(v string) {
+	if err := update.SkipVersion(v); err != nil {
+		applog.Error("跳过版本失败: %v", err)
+	}
+}
+
+// ClearUpdateSkip 清除跳过/静默标记，让提醒重新生效。
+func (a *App) ClearUpdateSkip() {
+	if err := update.ClearSkipped(); err != nil {
+		applog.Error("清除跳过标记失败: %v", err)
+	}
+}
+
+// OpenDownloadPage 用系统默认浏览器打开 Release 下载页。
+// 不直接下载二进制：github.com 的下载域名在国内实测不可达，交给用户浏览器更可靠。
+func (a *App) OpenDownloadPage(url string) {
+	target := url
+	if target == "" {
+		target = update.DownloadPageURL()
+	}
+	// 只接受本项目 Release 页，避免被传入任意地址
+	if !strings.HasPrefix(target, "https://github.com/") {
+		target = update.DownloadPageURL()
+	}
+	runtime.BrowserOpenURL(a.ctx, target)
+	applog.Info("已打开下载页: %s", target)
 }
 
 // ── 注册表清理 ──

@@ -41,6 +41,7 @@
     <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M12 3.2l7 2.6v6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9v-6z"/><path d="M9.2 12.2l2 2 3.6-3.8"/></symbol>
     <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3.6l8.4 4.4L12 12.4 3.6 8z"/><path d="M3.6 12.4L12 16.8l8.4-4.4"/><path d="M3.6 16.6L12 21l8.4-4.4"/></symbol>
     <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.2 6.6a4.2 4.2 0 0 0-5.5 5L3.4 16.9a2 2 0 0 0 2.8 2.8l5.3-5.3a4.2 4.2 0 0 0 5-5.5l-2.6 2.6-2.1-.7-.7-2.1z"/></symbol>
+    <symbol id="i-update" viewBox="0 0 24 24"><path d="M12 4.4v9.2"/><path d="M8.4 10.2L12 13.8l3.6-3.6"/><path d="M5 16.2v1.9c0 1 .8 1.8 1.8 1.8h10.4c1 0 1.8-.8 1.8-1.8v-1.9"/></symbol>
   </defs>
 </svg>
 
@@ -88,8 +89,11 @@
       <button class="rail-item" data-tab="history">
         <svg class="icon"><use href="#i-history"/></svg><span>清理历史</span>
       </button>
+      <button class="rail-item" data-tab="update">
+        <svg class="icon"><use href="#i-update"/></svg><span>软件更新</span>
+      </button>
       <div class="rail-foot">
-        <span class="rail-badge">v3.4</span>
+        <span class="rail-badge" id="rail-version">v3.4</span>
         <span class="rail-note">Fluent</span>
       </div>
     </nav>
@@ -332,6 +336,58 @@
         </section>
       </section>
 
+      <!-- 软件更新 -->
+      <section class="panel" id="tab-update" role="tabpanel" aria-label="软件更新">
+        <div class="panel-head reveal" style="--d:0ms">
+          <div class="panel-title">
+            <h2>软件更新</h2>
+            <p class="sub">检查新版本并前往下载；不想立刻更新可稍后提醒或跳过此版本</p>
+          </div>
+          <div class="actions">
+            <button class="btn btn-accent" id="btn-check-update">
+              <svg class="icon"><use href="#i-update"/></svg><span>检查更新</span>
+            </button>
+          </div>
+        </div>
+
+        <section class="card acrylic reveal" style="--d:40ms">
+          <header class="card-head">
+            <h3>版本信息 <span class="card-hint" id="update-status">未检查</span></h3>
+            <div class="card-actions">
+              <button class="btn btn-sm btn-subtle" id="btn-update-later" disabled>稍后提醒</button>
+              <button class="btn btn-sm btn-subtle" id="btn-update-skip" disabled>跳过此版本</button>
+              <button class="btn btn-sm btn-accent" id="btn-update-now" hidden>
+                <svg class="icon"><use href="#i-update"/></svg><span>前往下载</span>
+              </button>
+            </div>
+          </header>
+
+          <div class="table-wrap">
+            <table class="hist">
+              <tbody>
+                <tr><td>当前版本</td><td id="upd-current">—</td></tr>
+                <tr><td>最新版本</td><td id="upd-latest">—</td></tr>
+                <tr><td>发布时间</td><td id="upd-published">—</td></tr>
+                <tr><td>安装包大小</td><td id="upd-size">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="update-notes" id="update-notes" hidden>
+            <h4>更新说明</h4>
+            <pre id="update-notes-text"></pre>
+          </div>
+        </section>
+
+        <div class="callout reveal" style="--d:80ms">
+          <svg class="icon"><use href="#i-info"/></svg>
+          <div>
+            <strong>更新方式：覆盖即可，无需卸载</strong>
+            <span>本程序是单文件绿色软件，下载新版本 exe 覆盖旧文件即完成更新。目录规则、排除项与清理历史保存在 <code>%APPDATA%\CacheCleaner</code>，不会因更新丢失。</span>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 </div>
@@ -386,6 +442,26 @@
     </div>
     <div class="progress-track"><div class="progress-fill" id="clean-fill"></div></div>
     <span class="taskbar-sub" id="clean-sub"></span>
+  </div>
+</div>
+
+<!-- ── 更新提醒弹窗（启动后若有新版本自动弹出） ── -->
+<div class="scrim" id="update-alert" hidden>
+  <div class="dialog acrylic" role="alertdialog" aria-modal="true" aria-labelledby="update-alert-title">
+    <div class="dialog-body">
+      <span class="dialog-icon"><svg class="icon"><use href="#i-update"/></svg></span>
+      <div class="dialog-text">
+        <h3 id="update-alert-title">发现新版本</h3>
+        <p id="update-alert-text"></p>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-subtle" id="btn-alert-skip">跳过此版本</button>
+      <button class="btn btn-subtle" id="btn-alert-later">稍后提醒</button>
+      <button class="btn btn-accent" id="btn-alert-now">
+        <svg class="icon"><use href="#i-update"/></svg><span>前往下载</span>
+      </button>
+    </div>
   </div>
 </div>
 

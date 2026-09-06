@@ -125,6 +125,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!$('#modal').hidden) $('#modal-cancel').click();
   else if (!$('#about').hidden) show($('#about'), false);
+  else if (!$('#update-alert').hidden) hideUpdateAlert();
 });
 
 /* ── 清理进度（删除大目录可能持续数分钟，必须让用户看到进展） ───────── */
@@ -458,7 +459,7 @@ window.runtime.EventsOn('dism:progress', (p) => {
 
 /* ── 导航 ───────────────────────────────────────────────────────────── */
 
-const TAB_LOADERS = { custom: refreshDirs, history: refreshHistory, registry: () => { if (!regEntries.length) scanRegistry(); }, tools: refreshDismInfo };
+const TAB_LOADERS = { custom: refreshDirs, history: refreshHistory, registry: () => { if (!regEntries.length) scanRegistry(); }, tools: refreshDismInfo, update: refreshUpdate };
 
 $$('.rail-item').forEach((btn) => btn.onclick = () => {
   $$('.rail-item').forEach((x) => { x.classList.remove('is-active'); x.removeAttribute('aria-current'); });
@@ -520,6 +521,194 @@ $('#about-close').onclick = () => {
   if (lastFocused && lastFocused.focus) lastFocused.focus();
 };
 
+/* ── 软件更新 ──────────────────────────────────────────────────────── */
+
+let lastUpdateInfo = null; // 缓存最近一次更新信息，供弹窗/页面共享
+
+// 渲染设置页「软件更新」tab 的版本信息
+function renderUpdate(info) {
+  if (!info) return;
+  lastUpdateInfo = info;
+
+  // 版本信息表
+  const cur = $('#upd-current');
+  const lat = $('#upd-latest');
+  const pub = $('#upd-published');
+  const sz  = $('#upd-size');
+  if (cur) cur.textContent = info.current || '—';
+  if (lat) lat.textContent = info.latest || '—';
+  if (pub) pub.textContent = info.publishedAt || '—';
+  if (sz)  sz.textContent = info.size ? fmtSize(info.size) : '—';
+
+  // 状态标签
+  const status = $('#update-status');
+  if (status) {
+    if (info.hasUpdate) {
+      status.textContent = info.snoozed ? '有更新（已推迟提醒）' : info.skipped ? '有更新（已跳过）' : '有更新可用';
+      status.className = 'card-hint ' + (info.snoozed || info.skipped ? '' : 'has-update');
+    } else {
+      status.textContent = info.current ? '已是最新' : '未检查';
+      status.className = 'card-hint';
+    }
+  }
+
+  // 更新说明
+  const notesWrap = $('#update-notes');
+  const notesText = $('#update-notes-text');
+  if (notesWrap && notesText) {
+    const hasNotes = info.notes && info.notes.trim();
+    show(notesWrap, hasNotes);
+    if (hasNotes) notesText.textContent = info.notes;
+  }
+
+  // 按钮可见性 / 可用性
+  const btnNow   = $('#btn-update-now');
+  const btnLater = $('#btn-update-later');
+  const btnSkip  = $('#btn-update-skip');
+
+  if (btnNow)   show(btnNow,   info.hasUpdate && !info.skipped);
+  if (btnLater) btnLater.disabled = !info.hasUpdate || info.snoozed || info.skipped;
+  if (btnSkip)  btnSkip.disabled  = !info.hasUpdate || info.skipped;
+
+  // 侧栏版本号
+  const rv = $('#rail-version');
+  if (rv && info.current) rv.textContent = info.current;
+}
+
+// 启动更新提醒弹窗（仅在有更新 && 未推迟 && 未跳过时自动弹出）
+function showUpdateAlert(info) {
+  if (!info || !info.hasUpdate || info.snoozed || info.skipped) return;
+  const alertEl = $('#update-alert');
+  const text = $('#update-alert-text');
+  if (!alertEl || !text) return;
+  text.textContent = `当前 ${info.current}，最新 ${info.latest}。可前往下载页获取新版本。`;
+  show(alertEl, true);
+  $('#btn-alert-now').focus();
+}
+
+// 关闭更新提醒弹窗
+function hideUpdateAlert() {
+  show($('#update-alert'), false);
+}
+
+// 初始化更新功能：绑定按钮 + 注册后端事件
+function initUpdate() {
+  // 后端 startup 5s 后会推送 update:info
+  window.runtime.EventsOn('update:info', (info) => {
+    renderUpdate(info);
+    showUpdateAlert(info);
+  });
+
+  // 设置页「检查更新」按钮（force=true，忽略静默/跳过策略）
+  const btnCheck = $('#btn-check-update');
+  if (btnCheck) {
+    btnCheck.onclick = async () => {
+      btnCheck.disabled = true;
+      try {
+        const info = await call('CheckUpdate', true);
+        renderUpdate(info);
+        if (info.hasUpdate) {
+          toast(`发现新版本 ${info.latest}`);
+        } else {
+          toast('当前已是最新版本');
+        }
+      } catch (e) {
+        toast('检查更新失败');
+      } finally {
+        btnCheck.disabled = false;
+      }
+    };
+  }
+
+  // 设置页按钮
+  const btnNow = $('#btn-update-now');
+  if (btnNow) {
+    btnNow.onclick = () => {
+      const url = lastUpdateInfo && lastUpdateInfo.url ? lastUpdateInfo.url : '';
+      call('OpenDownloadPage', url);
+    };
+  }
+
+  const btnLater = $('#btn-update-later');
+  if (btnLater) {
+    btnLater.onclick = async () => {
+      await call('SnoozeUpdate', 24);
+      toast('已推迟提醒，24 小时后再提醒');
+      hideUpdateAlert();
+      // 重新渲染状态
+      const info = await call('CheckUpdate', false);
+      renderUpdate(info);
+    };
+  }
+
+  const btnSkip = $('#btn-update-skip');
+  if (btnSkip) {
+    btnSkip.onclick = async () => {
+      const v = lastUpdateInfo && lastUpdateInfo.latest ? lastUpdateInfo.latest : '';
+      await call('SkipUpdate', v);
+      toast('已跳过此版本');
+      hideUpdateAlert();
+      const info = await call('CheckUpdate', false);
+      renderUpdate(info);
+    };
+  }
+
+  // 启动提醒弹窗按钮
+  const alertNow = $('#btn-alert-now');
+  if (alertNow) {
+    alertNow.onclick = () => {
+      const url = lastUpdateInfo && lastUpdateInfo.url ? lastUpdateInfo.url : '';
+      call('OpenDownloadPage', url);
+      hideUpdateAlert();
+    };
+  }
+
+  const alertLater = $('#btn-alert-later');
+  if (alertLater) {
+    alertLater.onclick = async () => {
+      await call('SnoozeUpdate', 24);
+      hideUpdateAlert();
+      const info = await call('CheckUpdate', false);
+      renderUpdate(info);
+    };
+  }
+
+  const alertSkip = $('#btn-alert-skip');
+  if (alertSkip) {
+    alertSkip.onclick = async () => {
+      const v = lastUpdateInfo && lastUpdateInfo.latest ? lastUpdateInfo.latest : '';
+      await call('SkipUpdate', v);
+      hideUpdateAlert();
+      const info = await call('CheckUpdate', false);
+      renderUpdate(info);
+    };
+  }
+
+  // 弹窗点击遮罩关闭
+  const alertEl = $('#update-alert');
+  if (alertEl) {
+    alertEl.addEventListener('click', (e) => {
+      if (e.target === alertEl) hideUpdateAlert();
+    });
+  }
+
+  // 初始填充侧栏版本号
+  call('GetVersion').then((v) => {
+    const rv = $('#rail-version');
+    if (rv && v) rv.textContent = v;
+  }).catch(() => {});
+}
+
+// 打开「软件更新」tab 时刷新数据
+async function refreshUpdate() {
+  try {
+    // 先拿当前版本，再静默检查（受静默/跳过策略约束）
+    const v = await call('GetVersion');
+    const info = await call('CheckUpdate', false);
+    renderUpdate(Object.assign({}, info, { current: info.current || v }));
+  } catch (e) { /* 静默 */ }
+}
+
 /* ── 入口 ───────────────────────────────────────────────────────────── */
 
 $('#btn-ai').onclick = () => startScan('ai');
@@ -529,3 +718,4 @@ initTheme();
 renderKpis();
 renderChart();
 refreshDirs();
+initUpdate();

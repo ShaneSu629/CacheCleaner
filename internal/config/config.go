@@ -45,6 +45,19 @@ func Default() *Config {
 	return cfg
 }
 
+// defaultExcludes 是内置的凭据/身份保护名单（路径段名，大小写不敏感）。
+//
+// 背景：WorkBuddy 的 CodeBuddyExtension\Data\Public\auth、以及 ~\.workbuddy 下的
+// workbuddy.db / user-state.json / device-id / app\session 承载登录态与设备标识。
+// 一旦被当作缓存清理，用户就会被强制退出并要求重新登录。
+//
+// 这里做纵深防御：即使某条规则或用户自定义目录扫到了这些位置，也会被 IsExcluded 拦下，
+// 不会出现在可清理列表里。用户仍可在配置中追加自己的排除项，本名单始终生效。
+var defaultExcludes = []string{
+	"auth", "auths", "credentials", "credential", "token", "tokens",
+	"keychain", "device-id", "local_storage", "Local Storage",
+}
+
 // Load 初始化配置，并尝试从用户配置目录加载自定义排除/目录。
 func Load() (*Config, error) {
 	home, _ := os.UserHomeDir()
@@ -89,6 +102,7 @@ func Load() (*Config, error) {
 		cfg.ConfigFile = filepath.Join(conf, "CacheCleaner", "config.json")
 	}
 
+	var userExclude, userCustom []string
 	if cfg.ConfigFile != "" {
 		if data, err := os.ReadFile(cfg.ConfigFile); err == nil {
 			var u struct {
@@ -96,17 +110,13 @@ func Load() (*Config, error) {
 				CustomDirs  []string `json:"customDirs"`
 			}
 			if json.Unmarshal(data, &u) == nil {
-				cfg.ExcludeDirs = u.ExcludeDirs
-				cfg.CustomDirs = u.CustomDirs
+				userExclude, userCustom = u.ExcludeDirs, u.CustomDirs
 			}
 		}
 	}
-	if cfg.ExcludeDirs == nil {
-		cfg.ExcludeDirs = []string{}
-	}
-	if cfg.CustomDirs == nil {
-		cfg.CustomDirs = []string{}
-	}
+	// 内置凭据保护名单先落地，再追加用户自定义项：保证用户配置不会意外覆盖掉保护。
+	cfg.ExcludeDirs = append(append([]string{}, defaultExcludes...), userExclude...)
+	cfg.CustomDirs = append([]string{}, userCustom...)
 	return cfg, nil
 }
 
