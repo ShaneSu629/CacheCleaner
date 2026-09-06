@@ -35,13 +35,21 @@ type DownloadInfo struct {
 }
 
 // GetDownloadInfo 返回当前下载状态（无下载任务时返回 idle）。
+// 进程重启后内存状态丢失：若磁盘上存在已下载完成的 CacheCleaner.new.exe，
+// 直接恢复为 done 状态，避免下载好的文件变成孤儿、用户重复下载。
 func GetDownloadInfo() DownloadInfo {
 	dlMu.Lock()
 	defer dlMu.Unlock()
-	if !dlActive {
-		return DownloadInfo{State: "idle"}
+	if dlActive {
+		return dlInfo
 	}
-	return dlInfo
+	// 无活动任务：检查磁盘上有没有已下载完成但未应用的临时文件
+	if p, err := downloadPath(); err == nil {
+		if _, statErr := os.Stat(p); statErr == nil {
+			return DownloadInfo{State: "done", Pct: 100, Path: p}
+		}
+	}
+	return DownloadInfo{State: "idle"}
 }
 
 // downloadPath 返回下载临时文件路径（exe 同目录下 .new 后缀，便于覆盖替换）。
@@ -59,11 +67,30 @@ func downloadPath() (string, error) {
 
 // StartDownload 后台下载最新版到临时文件并校验 SHA256。
 // 返回 nil 表示已启动（进度经 GetDownloadInfo 轮询）。
+// 幂等：已有下载任务进行中、或磁盘上已有下载完成的文件时直接返回成功，
+// 不会重复下载浪费 IO。
 func StartDownload(info *Info) error {
 	dlMu.Lock()
 	if dlActive {
 		dlMu.Unlock()
-		return errors.New("已有下载任务进行中")
+		return nil // 已在下载中，无需重复启动
+	}
+	dlMu.Unlock()
+
+	// 已有完成文件：直接复用，不再下载
+	if p, err := downloadPath(); err == nil {
+		if _, statErr := os.Stat(p); statErr == nil {
+			dlMu.Lock()
+			dlInfo = DownloadInfo{State: "done", Pct: 100, Path: p}
+			dlMu.Unlock()
+			return nil
+		}
+	}
+
+	dlMu.Lock()
+	if dlActive { // 双重检查：并发调用下可能已被其他 goroutine 启动
+		dlMu.Unlock()
+		return nil
 	}
 	dlActive = true
 	dlInfo = DownloadInfo{State: "downloading", Pct: 0, Total: info.Size}
@@ -269,6 +296,23 @@ func DownloadedPath() string {
 		}
 	}
 	return ""
+}
+
+// CleanupOld 清理更新残留：旧版本备份（CacheCleaner.old.exe）与
+// 未应用的下载文件（CacheCleaner.new.exe）。
+// 启动时调用：正常更新后 bat 会删掉它们；若上次更新中断（如杀进程），
+// 残留文件在此兜底清理，避免目录里堆垃圾。
+func CleanupOld() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	dir := filepath.Dir(exe)
+	// 只清 .old（旧版本备份）——.new 是已下载待应用的新版本，不能动
+	oldPath := filepath.Join(dir, "CacheCleaner.old.exe")
+	if _, err := os.Stat(oldPath); err == nil {
+		os.Remove(oldPath)
+	}
 }
 
 // ApplyAndRestart 用下载好的新版本覆盖旧 exe 并重启。

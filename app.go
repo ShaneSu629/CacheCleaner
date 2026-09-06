@@ -124,6 +124,9 @@ func (a *App) startup(ctx context.Context) {
 	applog.Info("启动完成: OS=%s Home=%s Documents=%s Windows=%s",
 		cfg.OS, cfg.Home, cfg.Documents, cfg.Windows)
 
+	// 清理上次更新残留（CacheCleaner.old.exe）：更新中断时兜底
+	update.CleanupOld()
+
 	// 启动后延迟自动检查更新：走后台 goroutine，失败或处于静默期都不打扰用户。
 	// 发现新版本且未跳过时自动开始后台下载（商业软件式静默下载），
 	// 下载完成后前端弹提示，用户点「更新并重启」即可完成更新。

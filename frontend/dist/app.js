@@ -794,12 +794,50 @@ function startDlPolling() {
       clearInterval(dlTimer);
       dlTimer = null;
       if (dlStatus.state === 'done') {
-        toast('新版本已下载完成，可更新并重启');
+        promptApplyUpdate();
       } else if (dlStatus.state === 'error') {
         toast('下载失败：' + (dlStatus.message || '未知错误'));
       }
     }
   }, 1000);
+}
+
+// 下载完成：立即弹顶部确认框，让用户马上更新
+let applyPromptShown = false;
+function promptApplyUpdate() {
+  if (applyPromptShown) return; // 只弹一次，避免重复骚扰
+  applyPromptShown = true;
+  const scrim = $('#modal');
+  scrim.classList.add('top');
+  scrim.dataset.mode = 'alert';
+  $('#modal-title').textContent = '新版本已就绪';
+  $('#modal-text').textContent = '新版本已下载完成，是否立即更新？\n更新将关闭程序、替换为新版本并自动重新打开，全程约几秒钟。';
+  $('#modal-ok').textContent = '立即更新';
+  $('#modal-ok').className = 'btn btn-accent';
+  show($('#modal-cancel'), true);
+  $('#modal-cancel').textContent = '稍后再说';
+  show(scrim, true);
+  $('#modal-ok').focus();
+
+  const doApply = async () => {
+    const err = await call('ApplyUpdateAndRestart');
+    if (err) { toast(err); return; }
+    try { window.runtime.Quit(); } catch (e) { /* 退出失败由 bat 脚本兜底等待 */ }
+  };
+
+  $('#modal-ok').onclick = doApply;
+  $('#modal-cancel').onclick = () => {
+    scrim.classList.remove('top');
+    delete scrim.dataset.mode;
+    show(scrim, false);
+    $('#modal-ok').onclick = null;
+    $('#modal-cancel').onclick = null;
+    $('#modal-ok').className = 'btn btn-danger';
+    $('#modal-ok').textContent = '确认清理';
+    $('#modal-cancel').textContent = '取消';
+    applyPromptShown = false; // 取消后如果用户再点下载完成还能再弹
+    toast('可在「软件更新」页随时点击「更新并重启」');
+  };
 }
 
 // 渲染设置页「软件更新」tab 的版本信息
@@ -929,7 +967,8 @@ function initUpdate() {
       } else if (dlStatus.state === 'done') {
         renderUpdateDl('done', 100);
         renderUpdate(info);
-        toast('新版本已下载完成，可更新并重启');
+        // 上次已下载完成（重启后恢复）：立即提示更新
+        promptApplyUpdate();
       }
     }).catch(() => {});
   });
@@ -959,12 +998,14 @@ function initUpdate() {
   const btnNow = $('#btn-update-now');
   if (btnNow) {
     btnNow.onclick = async () => {
+      if (btnNow.disabled) return; // 防连点
+      btnNow.disabled = true;
       const ok = await confirmModal(
         '将关闭程序、替换为新版本并自动重新打开。确定现在更新吗？',
         '更新并重启');
-      if (!ok) return;
+      if (!ok) { btnNow.disabled = false; return; }
       const err = await call('ApplyUpdateAndRestart');
-      if (err) { toast(err); return; }
+      if (err) { toast(err); btnNow.disabled = false; return; }
       // 替换脚本已在后台启动，退出本程序让它接管
       try { window.runtime.Quit(); } catch (e) { /* 退出失败由脚本兜底等待 */ }
     };
@@ -974,8 +1015,12 @@ function initUpdate() {
   const btnDl = $('#btn-update-download');
   if (btnDl) {
     btnDl.onclick = async () => {
+      if (btnDl.disabled) return; // 防连点
+      btnDl.disabled = true;
+      applyPromptShown = false; // 新一轮下载，重置"已弹过"标记
       const err = await call('StartUpdateDownload');
-      if (err) { toast(err); return; }
+      if (err) { toast(err); btnDl.disabled = false; return; }
+      hideUpdateAlert();
       toast('已开始后台下载，完成后会提示');
       startDlPolling();
     };
