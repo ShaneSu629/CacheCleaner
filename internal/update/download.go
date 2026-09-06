@@ -258,11 +258,15 @@ func CancelDownload() {
 }
 
 // DownloadedPath 返回已完成下载的临时文件路径（未完成时返回空）。
+// 注意不能要求 dlActive：下载完成时 goroutine 会把 dlActive 置 false，
+// 只有 State=="done" 才是有效判据。
 func DownloadedPath() string {
 	dlMu.Lock()
 	defer dlMu.Unlock()
-	if dlActive && dlInfo.State == "done" && dlInfo.Path != "" {
-		return dlInfo.Path
+	if dlInfo.State == "done" && dlInfo.Path != "" {
+		if _, err := os.Stat(dlInfo.Path); err == nil {
+			return dlInfo.Path
+		}
 	}
 	return ""
 }
@@ -283,8 +287,11 @@ func ApplyAndRestart() error {
 		return err
 	}
 
-	// 写替换脚本：等待旧进程退出 → 覆盖 → 启动新版
+	// 写替换脚本：等待旧进程退出 → 改名旧 exe → 覆盖 → 启动新版
+	// 关键：运行中的 exe 在 Windows 上被独占锁定，copy 覆盖会失败；
+	// 必须先 rename 旧 exe（改名允许），再 copy 新文件进去。
 	bat := filepath.Join(os.TempDir(), "cachecleaner_update.bat")
+	oldExe := filepath.Join(filepath.Dir(exe), "CacheCleaner.old.exe")
 	content := strings.Join([]string{
 		"@echo off",
 		"setlocal",
@@ -300,13 +307,20 @@ func ApplyAndRestart() error {
 		"rem 超时放弃",
 		"exit /b 1",
 		":replace",
+		"rem 旧 exe 改名（运行中可改名），清理上次残留",
+		"del /Q \"" + oldExe + "\" >nul 2>&1",
+		"ren \"" + exe + "\" \"CacheCleaner.old.exe\"",
+		"if errorlevel 1 goto fail",
 		"copy /Y \"" + newPath + "\" \"" + exe + "\" >nul",
 		"if errorlevel 1 goto fail",
+		"rem 覆盖成功，删除临时文件与旧版本",
 		"del /Q \"" + newPath + "\" >nul 2>&1",
+		"del /Q \"" + oldExe + "\" >nul 2>&1",
 		"start \"\" \"" + exe + "\"",
 		"exit /b 0",
 		":fail",
-		"rem 覆盖失败时提示用户手动替换",
+		"rem 覆盖失败：把旧 exe 改名回去，提示用户手动替换",
+		"if exist \"" + oldExe + "\" ren \"" + oldExe + "\" \"" + filepath.Base(exe) + "\"",
 		"exit /b 1",
 		"",
 	}, "\r\n")
