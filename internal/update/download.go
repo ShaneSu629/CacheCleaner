@@ -343,13 +343,15 @@ func ApplyAndRestart() error {
 	bat := filepath.Join(os.TempDir(), "cachecleaner_update.bat")
 	logFile := filepath.Join(os.TempDir(), "cachecleaner_update.log")
 	oldExe := filepath.Join(filepath.Dir(exe), "CacheCleaner.old.exe")
+	// 注意：bat 必须是纯 ASCII（Go WriteFile 写 UTF-8，cmd 默认按 GBK 解析，
+	// 中文注释会被当乱码可能吞掉换行导致命令粘连卡死——历史上真踩过）。
 	content := strings.Join([]string{
 		"@echo off",
 		"setlocal",
-		"rem CacheCleaner 自更新脚本（日志: " + logFile + "）",
+		"rem CacheCleaner self-update script (log: " + logFile + ")",
 		"echo [%date% %time%] update bat started >> \"" + logFile + "\"",
 		"echo [%date% %time%] target=" + exe + " >> \"" + logFile + "\"",
-		"rem 等待本程序退出（最多 30 秒，for /l 循环避免延迟展开问题）",
+		"rem wait for app exit (max 30s, for /l avoids delayed expansion pitfall)",
 		"for /l %%i in (1,1,30) do (",
 		"  tasklist /FI \"IMAGENAME eq " + filepath.Base(exe) + "\" 2>nul | find /I \"" + filepath.Base(exe) + "\" >nul",
 		"  if errorlevel 1 goto replace",
@@ -363,7 +365,7 @@ func ApplyAndRestart() error {
 		"ren \"" + exe + "\" \"CacheCleaner.old.exe\"",
 		"if errorlevel 1 goto fail",
 		"echo [%date% %time%] renamed ok, copying >> \"" + logFile + "\"",
-		"rem copy 重试 3 次（杀毒可能短暂锁文件）；不用变量计数避免延迟展开坑",
+		"rem copy retry x3 (antivirus may briefly lock file); no var counting to avoid delayed expansion",
 		"copy /Y \"" + newPath + "\" \"" + exe + "\" >nul",
 		"if not errorlevel 1 goto copyok",
 		"ping 127.0.0.1 -n 2 >nul",
