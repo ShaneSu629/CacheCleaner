@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"cachecleaner/internal/applog"
 )
 
 // 下载状态（并发安全，供前端轮询）。
@@ -332,46 +334,65 @@ func ApplyAndRestart() error {
 	}
 
 	// 写替换脚本：等待旧进程退出 → 改名旧 exe → 覆盖 → 启动新版
-	// 关键：运行中的 exe 在 Windows 上被独占锁定，copy 覆盖会失败；
-	// 必须先 rename 旧 exe（改名允许），再 copy 新文件进去。
+	// 关键点：
+	//  - 运行中的 exe 被独占锁定，copy 覆盖会失败，必须先 ren 再 copy
+	//  - 循环用 for /l（不用 %var% 计数：cmd 的 %var% 在解析时展开，
+	//    循环内 set /a 后读不到新值，计数永远停在初值）
+	//  - 全程写日志到 update.log，CREATE_NO_WINDOW 模式下排障全靠它
+	//  - copy 重试 3 次（杀毒软件可能短暂锁住新文件）
 	bat := filepath.Join(os.TempDir(), "cachecleaner_update.bat")
+	logFile := filepath.Join(os.TempDir(), "cachecleaner_update.log")
 	oldExe := filepath.Join(filepath.Dir(exe), "CacheCleaner.old.exe")
 	content := strings.Join([]string{
 		"@echo off",
 		"setlocal",
-		"rem CacheCleaner 自更新脚本",
-		"rem 等待本程序退出（最多 60 秒）",
-		"set tries=0",
-		":waitloop",
-		"tasklist /FI \"IMAGENAME eq " + filepath.Base(exe) + "\" 2>nul | find /I \"" + filepath.Base(exe) + "\" >nul",
-		"if errorlevel 1 goto replace",
-		"rem timeout 命令在某些精简系统不可用，用 ping 做 1 秒延时",
-		"ping 127.0.0.1 -n 2 >nul",
-		"set /a tries+=1",
-		"if %tries% lss 60 goto waitloop",
-		"rem 超时放弃",
+		"rem CacheCleaner 自更新脚本（日志: " + logFile + "）",
+		"echo [%date% %time%] update bat started >> \"" + logFile + "\"",
+		"echo [%date% %time%] target=" + exe + " >> \"" + logFile + "\"",
+		"rem 等待本程序退出（最多 30 秒，for /l 循环避免延迟展开问题）",
+		"for /l %%i in (1,1,30) do (",
+		"  tasklist /FI \"IMAGENAME eq " + filepath.Base(exe) + "\" 2>nul | find /I \"" + filepath.Base(exe) + "\" >nul",
+		"  if errorlevel 1 goto replace",
+		"  ping 127.0.0.1 -n 2 >nul",
+		")",
+		"echo [%date% %time%] timeout waiting exit >> \"" + logFile + "\"",
 		"exit /b 1",
 		":replace",
-		"rem 旧 exe 改名（运行中可改名），清理上次残留",
+		"echo [%date% %time%] process exited, renaming >> \"" + logFile + "\"",
 		"del /Q \"" + oldExe + "\" >nul 2>&1",
 		"ren \"" + exe + "\" \"CacheCleaner.old.exe\"",
 		"if errorlevel 1 goto fail",
+		"echo [%date% %time%] renamed ok, copying >> \"" + logFile + "\"",
+		"rem copy 重试 3 次（杀毒可能短暂锁文件）；不用变量计数避免延迟展开坑",
 		"copy /Y \"" + newPath + "\" \"" + exe + "\" >nul",
-		"if errorlevel 1 goto fail",
-		"rem 覆盖成功，删除临时文件与旧版本",
+		"if not errorlevel 1 goto copyok",
+		"ping 127.0.0.1 -n 2 >nul",
+		"copy /Y \"" + newPath + "\" \"" + exe + "\" >nul",
+		"if not errorlevel 1 goto copyok",
+		"ping 127.0.0.1 -n 3 >nul",
+		"copy /Y \"" + newPath + "\" \"" + exe + "\" >nul",
+		"if not errorlevel 1 goto copyok",
+		"echo [%date% %time%] copy failed after retries >> \"" + logFile + "\"",
+		"goto fail",
+		":copyok",
+		"echo [%date% %time%] copied ok, cleanup >> \"" + logFile + "\"",
 		"del /Q \"" + newPath + "\" >nul 2>&1",
 		"del /Q \"" + oldExe + "\" >nul 2>&1",
+		"echo [%date% %time%] starting new version >> \"" + logFile + "\"",
 		"start \"\" \"" + exe + "\"",
+		"echo [%date% %time%] done >> \"" + logFile + "\"",
 		"exit /b 0",
 		":fail",
-		"rem 覆盖失败：把旧 exe 改名回去，提示用户手动替换",
+		"echo [%date% %time%] FAILED, rolling back >> \"" + logFile + "\"",
 		"if exist \"" + oldExe + "\" ren \"" + oldExe + "\" \"" + filepath.Base(exe) + "\"",
+		"echo [%date% %time%] rollback done >> \"" + logFile + "\"",
 		"exit /b 1",
 		"",
 	}, "\r\n")
 	if err := os.WriteFile(bat, []byte(content), 0o644); err != nil {
 		return err
 	}
+	applog.Info("替换脚本已写入: %s (日志: %s)", bat, logFile)
 
 	// 启动替换脚本（独立进程，父进程退出后继续运行）。
 	// CreateProcess 的 lpApplicationName 传 nil 会按第一个 token 解析，
