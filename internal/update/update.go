@@ -31,7 +31,10 @@ var version = "dev"
 const (
 	repoOwner = "ShaneSu629"
 	repoName  = "CacheCleaner"
-	apiURL    = "https://api.github.com/repos/" + repoOwner + "/" + repoName + "/releases/latest"
+	// 注意：不用 /releases/latest——它按发布时间排序，CI 多平台并行发布时
+	// 旧版本可能比新版本晚几秒发布，latest 会指向低版本导致漏报更新。
+	// 拉全量列表后按语义版本号取最大。
+	apiURL = "https://api.github.com/repos/" + repoOwner + "/" + repoName + "/releases"
 
 	// checkInterval 自动检查的最小间隔，避免每次启动都打 API（未鉴权限流 60 次/小时/IP）。
 	checkInterval = 6 * time.Hour
@@ -179,6 +182,8 @@ type release struct {
 	HTMLURL     string `json:"html_url"`
 	Body        string `json:"body"`
 	PublishedAt string `json:"published_at"`
+	Draft       bool   `json:"draft"`
+	Prerelease  bool   `json:"prerelease"`
 	Assets      []struct {
 		Name string `json:"name"`
 		Size int64  `json:"size"`
@@ -212,7 +217,18 @@ func Check(force bool) (*Info, error) {
 	// 沿用缓存结论时，重新计算静默/跳过标记与 HasUpdate
 	applyLocalState(info, st)
 
-	needNet := force || time.Since(st.LastCheck) > checkInterval || st.LatestVersion == ""
+	// needNet 判定：
+	//  - 手动检查（force）或首次（无缓存）→ 必须联网
+	//  - 超过检查间隔 → 联网
+	//  - 缓存结论是"无更新"（Latest <= Current）→ 间隔缩短到 1 小时重查：
+	//    "无更新"的缓存价值低，且 CI 并行发布可能让 latest 曾指向低版本，
+	//    若按 6 小时等，用户要等很久才能收到正确提示。
+	noUpdateCached := st.LatestVersion != "" && Compare(st.LatestVersion, cur) <= 0
+	interval := checkInterval
+	if noUpdateCached {
+		interval = time.Hour
+	}
+	needNet := force || st.LatestVersion == "" || time.Since(st.LastCheck) > interval
 	if !needNet {
 		return info, nil
 	}
@@ -268,7 +284,11 @@ func applyLocalState(info *Info, st State) {
 		Compare(st.SkippedVersion, info.Latest) == 0
 }
 
-// fetchLatest 拉取最新 release 信息。
+// fetchLatest 拉取 release 列表并按语义版本号选最新的一个。
+//
+// 关键：GitHub 的 /releases/latest 按发布时间排序，CI 并行发布时旧版本
+// 可能晚于新版本发布，导致 latest 指向低版本、漏报更新。这里改为拉全量
+// 列表（最多 30 个），用 Compare 按版本号取最大。
 func fetchLatest() (*release, error) {
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
@@ -287,14 +307,39 @@ func fetchLatest() (*release, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API 返回 %d", resp.StatusCode)
 	}
-	var rel release
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+	var rels []release
+	if err := json.NewDecoder(resp.Body).Decode(&rels); err != nil {
 		return nil, err
 	}
-	if rel.TagName == "" {
-		return nil, errors.New("release 响应缺少 tag_name")
+	if len(rels) == 0 {
+		return nil, errors.New("release 列表为空")
 	}
-	return &rel, nil
+	best := pickNewest(rels)
+	if best == nil {
+		return nil, errors.New("没有可用的正式 release")
+	}
+	return best, nil
+}
+
+// pickNewest 从 release 列表按语义版本号选出最大的正式版本。
+// 跳过草稿、预发布、空 tag 与非法版本串；全无效时返回 nil。
+func pickNewest(rels []release) *release {
+	best := -1
+	for i := range rels {
+		if rels[i].TagName == "" || rels[i].Draft || rels[i].Prerelease {
+			continue
+		}
+		if !isReleaseVersion(rels[i].TagName) {
+			continue
+		}
+		if best < 0 || Compare(rels[i].TagName, rels[best].TagName) > 0 {
+			best = i
+		}
+	}
+	if best < 0 {
+		return nil
+	}
+	return &rels[best]
 }
 
 // ── 用户操作 ──

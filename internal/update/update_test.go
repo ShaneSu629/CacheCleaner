@@ -121,6 +121,29 @@ func TestCheckNoNetworkUsesCache(t *testing.T) {
 	}
 }
 
+func TestPickNewestRelease(t *testing.T) {
+	// 模拟 CI 并行发布的乱序 release 列表（旧版本晚发布），
+	// 验证按版本号选最大而不是按发布时间。
+	rels := []release{
+		{TagName: "v1.0.7", Prerelease: false, Draft: false},
+		{TagName: "v1.1.1", Prerelease: false, Draft: false},
+		{TagName: "v1.1.0", Prerelease: false, Draft: false},
+		{TagName: "v1.2.0-rc1", Prerelease: true, Draft: false},
+		{TagName: "v1.3.0", Prerelease: false, Draft: true},
+		{TagName: "bad-tag", Prerelease: false, Draft: false},
+		{TagName: "", Prerelease: false, Draft: false},
+	}
+	best := pickNewest(rels)
+	if best == nil || best.TagName != "v1.1.1" {
+		t.Errorf("应选出 v1.1.1（按版本号最大），实际 %+v", best)
+	}
+
+	// 全是垃圾数据时返回 nil
+	if pickNewest([]release{{TagName: ""}}) != nil {
+		t.Error("无有效 release 时应返回 nil")
+	}
+}
+
 func TestDownloadPageURL(t *testing.T) {
 	u := DownloadPageURL()
 	if u == "" {
