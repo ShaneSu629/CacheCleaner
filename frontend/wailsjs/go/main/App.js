@@ -22,8 +22,16 @@ export function CheckUpdate(arg1) {
   return window['go']['main']['App']['CheckUpdate'](arg1);
 }
 
+export function ChooseDirectory(arg1) {
+  return window['go']['main']['App']['ChooseDirectory'](arg1);
+}
+
 export function CleanRegistry(arg1) {
   return window['go']['main']['App']['CleanRegistry'](arg1);
+}
+
+export function CleanResidueApp(arg1, arg2, arg3) {
+  return window['go']['main']['App']['CleanResidueApp'](arg1, arg2, arg3);
 }
 
 export function CleanSelected(arg1) {
@@ -36,6 +44,10 @@ export function ClearUpdateSkip() {
 
 export function FindLockers(arg1) {
   return window['go']['main']['App']['FindLockers'](arg1);
+}
+
+export function ForceUninstallApp(arg1) {
+  return window['go']['main']['App']['ForceUninstallApp'](arg1);
 }
 
 export function GetCustomDirs() {
@@ -62,8 +74,20 @@ export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
 }
 
+export function InstallPlugin(arg1) {
+  return window['go']['main']['App']['InstallPlugin'](arg1);
+}
+
 export function KillProcess(arg1, arg2) {
   return window['go']['main']['App']['KillProcess'](arg1, arg2);
+}
+
+export function ListPlugins() {
+  return window['go']['main']['App']['ListPlugins']();
+}
+
+export function ListUninstallApps() {
+  return window['go']['main']['App']['ListUninstallApps']();
 }
 
 export function LogFrontend(arg1) {
@@ -74,6 +98,10 @@ export function OpenDownloadPage(arg1) {
   return window['go']['main']['App']['OpenDownloadPage'](arg1);
 }
 
+export function OpenPluginDir() {
+  return window['go']['main']['App']['OpenPluginDir']();
+}
+
 export function RemoveCustomDir(arg1) {
   return window['go']['main']['App']['RemoveCustomDir'](arg1);
 }
@@ -82,12 +110,20 @@ export function RemoveExcludeDir(arg1) {
   return window['go']['main']['App']['RemoveExcludeDir'](arg1);
 }
 
+export function RunPluginScript(arg1) {
+  return window['go']['main']['App']['RunPluginScript'](arg1);
+}
+
 export function Scan(arg1) {
   return window['go']['main']['App']['Scan'](arg1);
 }
 
 export function ScanRegistry() {
   return window['go']['main']['App']['ScanRegistry']();
+}
+
+export function SetPluginEnabled(arg1, arg2) {
+  return window['go']['main']['App']['SetPluginEnabled'](arg1, arg2);
 }
 
 export function SkipUpdate(arg1) {
@@ -108,4 +144,12 @@ export function StartComponentRepair() {
 
 export function StartUpdateDownload() {
   return window['go']['main']['App']['StartUpdateDownload']();
+}
+
+export function UninstallApp(arg1) {
+  return window['go']['main']['App']['UninstallApp'](arg1);
+}
+
+export function UninstallPlugin(arg1) {
+  return window['go']['main']['App']['UninstallPlugin'](arg1);
 }

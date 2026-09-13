@@ -49,8 +49,8 @@ func main() {
 			Assets: assets,
 		},
 		Logger: wailsLogAdapter{},
-		// 背景色与页面 Mica 底色一致，避免窗口缩放时闪出白边
-		BackgroundColour: &options.RGBA{R: 242, G: 243, B: 246, A: 255},
+		// 背景色与页面 --bg（#f5f5f7）完全一致，避免窗口重绘时闪出底色
+		BackgroundColour: &options.RGBA{R: 245, G: 245, B: 247, A: 255},
 		OnStartup:         app.startup,
 		OnDomReady:        app.domReady,
 		OnBeforeClose:     app.beforeClose,

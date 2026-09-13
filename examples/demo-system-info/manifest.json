@@ -1,0 +1,12 @@
+{
+  "id": "demo-system-info",
+  "nameZh": "系统信息（Demo）",
+  "nameEn": "System Info (Demo)",
+  "icon": "i-info",
+  "descZh": "演示脚本型插件：通过 cc API 读取系统信息并渲染",
+  "descEn": "Demo script plugin: read system info via the cc API and render it",
+  "type": "script",
+  "entry": "main.js",
+  "version": "1.0.0",
+  "author": "你"
+}

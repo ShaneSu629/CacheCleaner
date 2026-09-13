@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
-  <title>智能缓存清理工具</title>
+  <title data-i18n="app.name">智能缓存清理工具</title>
   <link rel="stylesheet" href="/style.css" />
   <script>
     /* 主题预置：在首屏绘制前确定浅色/深色，避免闪白 */
@@ -41,6 +41,7 @@
     <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M12 3.2l7 2.6v6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9v-6z"/><path d="M9.2 12.2l2 2 3.6-3.8"/></symbol>
     <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3.6l8.4 4.4L12 12.4 3.6 8z"/><path d="M3.6 12.4L12 16.8l8.4-4.4"/><path d="M3.6 16.6L12 21l8.4-4.4"/></symbol>
     <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.2 6.6a4.2 4.2 0 0 0-5.5 5L3.4 16.9a2 2 0 0 0 2.8 2.8l5.3-5.3a4.2 4.2 0 0 0 5-5.5l-2.6 2.6-2.1-.7-.7-2.1z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.3 3.6 5.2 3.6 8.6s-1.2 6.3-3.6 8.6c-2.4-2.3-3.6-5.2-3.6-8.6s1.2-6.3 3.6-8.6z"/></symbol>
     <symbol id="i-update" viewBox="0 0 24 24"><path d="M12 4.4v9.2"/><path d="M8.4 10.2L12 13.8l3.6-3.6"/><path d="M5 16.2v1.9c0 1 .8 1.8 1.8 1.8h10.4c1 0 1.8-.8 1.8-1.8v-1.9"/></symbol>
   </defs>
 </svg>
@@ -52,11 +53,15 @@
     <div class="brand">
       <span class="brand-mark"><svg class="icon"><use href="#i-sparkle"/></svg></span>
       <span class="brand-text">
-        <strong>智能缓存清理工具</strong>
-        <small>跨平台 · 安全分级 · 一键释放空间</small>
+        <strong data-i18n="app.name">智能缓存清理工具</strong>
+        <small data-i18n="app.tagline">跨平台 · 安全分级 · 一键释放空间</small>
       </span>
     </div>
     <div class="topbar-actions">
+      <button class="btn btn-subtle" id="btn-lang" aria-label="切换语言" title="切换语言 / Switch language">
+        <svg class="icon"><use href="#i-globe"/></svg>
+        <span id="lang-label">English</span>
+      </button>
       <button class="btn btn-subtle" id="btn-theme" aria-label="切换深色 / 浅色主题" title="切换深色 / 浅色主题">
         <svg class="icon icon-sun"><use href="#i-sun"/></svg>
         <svg class="icon icon-moon"><use href="#i-moon"/></svg>
@@ -70,36 +75,44 @@
 
   <div class="layout">
 
-    <!-- ── 侧边导航：分组（macOS 系统设置式） ── -->
+    <!-- ── 侧边导航：分组 ── -->
     <nav class="rail" aria-label="主导航">
       <div class="rail-section">
-        <span class="rail-section-title">核心</span>
+        <span class="rail-section-title" data-i18n="nav.clean">清理</span>
         <button class="rail-item is-active" data-tab="scan" aria-current="page">
-          <svg class="icon"><use href="#i-scan"/></svg><span>扫描清理</span>
+          <svg class="icon"><use href="#i-scan"/></svg><span data-i18n="nav.scan">扫描清理</span>
         </button>
-      </div>
-
-      <div class="rail-section">
-        <span class="rail-section-title">维护</span>
-        <button class="rail-item" data-tab="tools">
-          <svg class="icon"><use href="#i-tools"/></svg><span>系统工具</span>
+        <button class="rail-item" data-tab="uninstaller">
+          <svg class="icon"><use href="#i-trash"/></svg><span data-i18n="nav.uninstall">软件卸载</span>
         </button>
         <button class="rail-item" data-tab="registry">
-          <svg class="icon"><use href="#i-registry"/></svg><span>注册表</span>
+          <svg class="icon"><use href="#i-registry"/></svg><span data-i18n="nav.registry">注册表</span>
+        </button>
+        <button class="rail-item" data-tab="tools">
+          <svg class="icon"><use href="#i-tools"/></svg><span data-i18n="nav.tools">系统工具</span>
         </button>
       </div>
 
       <div class="rail-section">
-        <span class="rail-section-title">管理</span>
+        <span class="rail-section-title" data-i18n="nav.settings">设置</span>
         <button class="rail-item" data-tab="custom">
-          <svg class="icon"><use href="#i-folder"/></svg><span>目录规则</span>
+          <svg class="icon"><use href="#i-folder"/></svg><span data-i18n="nav.custom">目录规则</span>
         </button>
         <button class="rail-item" data-tab="history">
-          <svg class="icon"><use href="#i-history"/></svg><span>清理历史</span>
+          <svg class="icon"><use href="#i-history"/></svg><span data-i18n="nav.history">清理历史</span>
         </button>
         <button class="rail-item" data-tab="update">
-          <svg class="icon"><use href="#i-update"/></svg><span>软件更新</span>
+          <svg class="icon"><use href="#i-update"/></svg><span data-i18n="nav.update">软件更新</span>
         </button>
+      </div>
+
+      <div class="rail-section" id="rail-plugins">
+        <span class="rail-section-title" data-i18n="nav.plugins">插件</span>
+        <button class="rail-item" data-tab="plugins">
+          <svg class="icon"><use href="#i-layers"/></svg><span data-i18n="nav.plugins.manage">插件管理</span>
+        </button>
+        <!-- 用户脚本插件动态注入到这里（renderPluginRail 追加，不清插件管理按钮） -->
+        <span id="rail-plugin-slot"></span>
       </div>
 
       <div class="rail-foot">
@@ -116,14 +129,14 @@
         <!-- Hero：首页聚焦扫描 -->
         <div class="card hero reveal" style="--d:0ms">
           <div class="hero-icon"><svg class="icon"><use href="#i-sparkle"/></svg></div>
-          <h3>为你的电脑腾出空间</h3>
-          <p>深度扫描 AI 工具缓存，或一键扫描浏览器 / IM / 系统升级缓存，安全分级放心清理</p>
+          <h3 data-i18n="hero.title">为你的电脑腾出空间</h3>
+          <p data-i18n="hero.sub">深度扫描 AI 工具缓存，或一键扫描浏览器 / IM / 系统升级缓存，安全分级放心清理</p>
           <div class="hero-actions">
             <button class="btn btn-accent btn-lg" id="btn-ai">
-              <svg class="icon"><use href="#i-scan"/></svg><span>深度扫描 AI 缓存</span>
+              <svg class="icon"><use href="#i-scan"/></svg><span data-i18n="hero.ai">深度扫描 AI 缓存</span>
             </button>
             <button class="btn btn-lg" id="btn-all">
-              <svg class="icon"><use href="#i-layers"/></svg><span>一键扫描全部</span>
+              <svg class="icon"><use href="#i-layers"/></svg><span data-i18n="hero.all">一键扫描全部</span>
             </button>
           </div>
         </div>
@@ -131,7 +144,7 @@
         <!-- 扫描进度 -->
         <div class="progress-card" id="status" style="--d:40ms" hidden>
           <div class="progress-head">
-            <span class="progress-label" id="status-text">扫描中…</span>
+            <span class="progress-label" id="status-text" data-i18n="scan.scanning">扫描中…</span>
             <span class="progress-pct" id="status-pct">0%</span>
           </div>
           <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
@@ -143,21 +156,21 @@
             <span class="kpi-icon"><svg class="icon"><use href="#i-layers"/></svg></span>
             <span class="kpi-text">
               <span class="kpi-value" id="kpi-count">0</span>
-              <span class="kpi-label">可清理项</span>
+              <span class="kpi-label" data-i18n="scan.cleanable">可清理项</span>
             </span>
           </div>
           <div class="kpi">
             <span class="kpi-icon"><svg class="icon"><use href="#i-coin"/></svg></span>
             <span class="kpi-text">
               <span class="kpi-value" id="kpi-size">0 B</span>
-              <span class="kpi-label">预计释放</span>
+              <span class="kpi-label" data-i18n="scan.free">预计释放</span>
             </span>
           </div>
           <div class="kpi">
             <span class="kpi-icon"><svg class="icon"><use href="#i-shield-check"/></svg></span>
             <span class="kpi-text">
               <span class="kpi-value" id="kpi-safe">0</span>
-              <span class="kpi-label">安全项（可放心清理）</span>
+              <span class="kpi-label" data-i18n="scan.safe">安全项（可放心清理）</span>
             </span>
           </div>
         </div>
@@ -166,36 +179,36 @@
         <div class="grid">
           <section class="card reveal" style="--d:90ms">
             <header class="card-head">
-              <h3>分类占用</h3>
-              <span class="card-hint" id="chart-hint">扫描后显示</span>
+              <h3 data-i18n="scan.chart">分类占用</h3>
+              <span class="card-hint" id="chart-hint" data-i18n="scan.chart.hint">扫描后显示</span>
             </header>
             <div class="chart" id="chart"></div>
             <div class="empty" id="empty-chart">
               <svg class="icon"><use href="#i-empty"/></svg>
-              <p>暂无数据，先执行一次扫描</p>
+              <p data-i18n="hero.empty">暂无数据，先执行一次扫描</p>
             </div>
           </section>
 
           <section class="card reveal" style="--d:120ms">
             <header class="card-head">
-              <h3>扫描结果 <span class="card-hint" id="stats">共 0 项</span></h3>
+              <h3><span data-i18n="scan.results">扫描结果</span> <span class="card-hint" id="stats">共 0 项</span></h3>
               <div class="card-actions">
                 <button class="btn btn-sm btn-subtle" id="btn-select-safe">
-                  <svg class="icon"><use href="#i-shield"/></svg><span>仅安全项</span>
+                  <svg class="icon"><use href="#i-shield"/></svg><span data-i18n="scan.safeOnly">仅安全项</span>
                 </button>
                 <button class="btn btn-sm btn-subtle" id="btn-select-all">
-                  <svg class="icon"><use href="#i-check-all"/></svg><span>全选</span>
+                  <svg class="icon"><use href="#i-check-all"/></svg><span data-i18n="scan.selectAll">全选</span>
                 </button>
                 <button class="btn btn-sm btn-danger" id="btn-clean">
-                  <svg class="icon"><use href="#i-trash"/></svg><span>清理选中</span>
+                  <svg class="icon"><use href="#i-trash"/></svg><span data-i18n="scan.cleanSelected">清理选中</span>
                 </button>
               </div>
             </header>
             <div class="list" id="list"></div>
             <div class="empty" id="empty-scan">
               <svg class="icon"><use href="#i-empty"/></svg>
-              <p>还没有扫描结果</p>
-              <span>点击上方「深度扫描 AI 缓存」开始</span>
+              <p data-i18n="hero.noresult">还没有扫描结果</p>
+              <span data-i18n="hero.noresult.sub">点击上方「深度扫描 AI 缓存」开始</span>
             </div>
           </section>
         </div>
@@ -205,38 +218,38 @@
       <section class="panel" id="tab-tools" role="tabpanel" aria-label="系统工具">
         <div class="panel-head reveal" style="--d:0ms">
           <div class="panel-title">
-            <h2>系统工具</h2>
-            <p class="sub">组件存储（WinSxS）清理等需要管理员权限的系统级维护</p>
+            <h2 data-i18n="tools.title">系统工具</h2>
+            <p class="sub" data-i18n="tools.sub">组件存储（WinSxS）清理等需要管理员权限的系统级维护</p>
           </div>
         </div>
 
         <div class="callout reveal" style="--d:40ms">
           <svg class="icon"><use href="#i-warning"/></svg>
           <div>
-            <strong>需要管理员权限</strong>
-            <span>本程序已配置为自动请求管理员权限。DISM 在后台执行（组件清理约需 5-20 分钟）。不使用 /ResetBase，清理后仍可卸载已装更新。<br/>⚠ 若清理反复报「拒绝访问」，说明组件存储可能不一致——先点「修复组件存储」（最长约 30 分钟），完成后再清理。</span>
+            <strong data-i18n="tools.warn.title">需要管理员权限</strong>
+            <span data-i18n="tools.warn.msg">本程序已配置为自动请求管理员权限。DISM 在后台执行（组件清理约需 5-20 分钟）。不使用 /ResetBase，清理后仍可卸载已装更新。<br/>⚠ 若清理反复报「拒绝访问」，说明组件存储可能不一致——先点「修复组件存储」（最长约 30 分钟），完成后再清理。</span>
           </div>
         </div>
 
         <section class="card reveal" style="--d:80ms">
           <header class="card-head">
-            <h3>组件存储（WinSxS）<span class="card-hint" id="dism-status">尚未分析</span></h3>
+            <h3><span data-i18n="tools.winsxs">组件存储（WinSxS）</span><span class="card-hint" id="dism-status" data-i18n="tools.notAnalyzed">尚未分析</span></h3>
             <div class="card-actions">
               <button class="btn btn-sm btn-subtle" id="btn-dism-analyze">
-                <svg class="icon"><use href="#i-scan"/></svg><span>分析组件存储</span>
+                <svg class="icon"><use href="#i-scan"/></svg><span data-i18n="tools.analyze">分析组件存储</span>
               </button>
               <button class="btn btn-sm btn-subtle" id="btn-dism-repair">
-                <svg class="icon"><use href="#i-shield-check"/></svg><span>修复组件存储</span>
+                <svg class="icon"><use href="#i-shield-check"/></svg><span data-i18n="tools.repair">修复组件存储</span>
               </button>
               <button class="btn btn-sm btn-danger" id="btn-dism-clean">
-                <svg class="icon"><use href="#i-trash"/></svg><span>执行组件清理</span>
+                <svg class="icon"><use href="#i-trash"/></svg><span data-i18n="tools.clean">执行组件清理</span>
               </button>
             </div>
           </header>
 
           <div class="progress-card dism-progress" id="dism-progress" hidden>
             <div class="progress-head">
-              <span class="progress-label" id="dism-progress-text">等待提权授权…</span>
+              <span class="progress-label" id="dism-progress-text" data-i18n="tools.waitAuth">等待提权授权…</span>
               <span class="progress-pct" id="dism-progress-pct">0%</span>
             </div>
             <div class="progress-track"><div class="progress-fill" id="dism-progress-fill"></div></div>
@@ -246,19 +259,19 @@
           <div class="table-wrap" id="dism-report" hidden>
             <table class="hist">
               <tbody>
-                <tr><td>资源管理器报告大小</td><td id="dism-reported">—</td></tr>
-                <tr><td>实际大小</td><td id="dism-actual">—</td></tr>
-                <tr><td>可回收包数</td><td id="dism-reclaimable">—</td></tr>
-                <tr><td>上次清理日期</td><td id="dism-lastclean">—</td></tr>
-                <tr><td>清理建议</td><td id="dism-recommended">—</td></tr>
+                <tr><td data-i18n="tools.reported">资源管理器报告大小</td><td id="dism-reported">—</td></tr>
+                <tr><td data-i18n="tools.actual">实际大小</td><td id="dism-actual">—</td></tr>
+                <tr><td data-i18n="tools.reclaimable">可回收包数</td><td id="dism-reclaimable">—</td></tr>
+                <tr><td data-i18n="tools.lastclean">上次清理日期</td><td id="dism-lastclean">—</td></tr>
+                <tr><td data-i18n="tools.recommended">清理建议</td><td id="dism-recommended">—</td></tr>
               </tbody>
             </table>
           </div>
           <div class="dism-raw" id="dism-raw" hidden><pre id="dism-raw-text"></pre></div>
           <div class="empty is-shown" id="empty-dism">
             <svg class="icon"><use href="#i-empty"/></svg>
-            <p>尚未分析组件存储</p>
-            <span>分析可查看 WinSxS 实际占用与可回收空间（约 1 分钟）</span>
+            <p data-i18n="tools.notAnalyzed">尚未分析组件存储</p>
+            <span data-i18n="tools.analyze.hint">分析可查看 WinSxS 实际占用与可回收空间（约 1 分钟）</span>
           </div>
         </section>
       </section>
@@ -267,12 +280,12 @@
       <section class="panel" id="tab-registry" role="tabpanel" aria-label="注册表垃圾清理">
         <div class="panel-head reveal" style="--d:0ms">
           <div class="panel-title">
-            <h2>注册表垃圾清理</h2>
-            <p class="sub">仅清理系统可自动重建的衍生数据（MRU 历史 / 程序名缓存）</p>
+            <h2 data-i18n="reg.title">注册表垃圾清理</h2>
+            <p class="sub" data-i18n="reg.sub">仅清理系统可自动重建的衍生数据（MRU 历史 / 程序名缓存）</p>
           </div>
           <div class="actions">
             <button class="btn btn-accent" id="btn-reg-scan">
-              <svg class="icon"><use href="#i-registry"/></svg><span>扫描注册表</span>
+              <svg class="icon"><use href="#i-registry"/></svg><span data-i18n="reg.scan">扫描注册表</span>
             </button>
           </div>
         </div>
@@ -280,31 +293,31 @@
         <div class="callout reveal" style="--d:40ms">
           <svg class="icon"><use href="#i-warning"/></svg>
           <div>
-            <strong>注册表操作不可恢复</strong>
-            <span>只删除键值、不删除键本身，且仅限内置白名单位置；建议优先清理「安全」项。</span>
+            <strong data-i18n="reg.warn.title">注册表操作不可恢复</strong>
+            <span data-i18n="reg.warn.msg">只删除键值、不删除键本身，且仅限内置白名单位置；建议优先清理「安全」项。</span>
           </div>
         </div>
 
         <section class="card reveal" style="--d:80ms">
           <header class="card-head">
-            <h3>可清理项 <span class="card-hint" id="reg-stats">未扫描</span></h3>
+            <h3><span data-i18n="reg.cleanable">可清理项</span> <span class="card-hint" id="reg-stats">未扫描</span></h3>
             <div class="card-actions">
               <button class="btn btn-sm btn-subtle" id="btn-reg-select-safe">
-                <svg class="icon"><use href="#i-shield"/></svg><span>仅安全项</span>
+                <svg class="icon"><use href="#i-shield"/></svg><span data-i18n="scan.safeOnly">仅安全项</span>
               </button>
               <button class="btn btn-sm btn-subtle" id="btn-reg-select-all">
-                <svg class="icon"><use href="#i-check-all"/></svg><span>全选</span>
+                <svg class="icon"><use href="#i-check-all"/></svg><span data-i18n="scan.selectAll">全选</span>
               </button>
               <button class="btn btn-sm btn-danger" id="btn-reg-clean">
-                <svg class="icon"><use href="#i-trash"/></svg><span>清理选中</span>
+                <svg class="icon"><use href="#i-trash"/></svg><span data-i18n="scan.cleanSelected">清理选中</span>
               </button>
             </div>
           </header>
           <div class="list" id="reg-list"></div>
           <div class="empty" id="empty-reg">
             <svg class="icon"><use href="#i-empty"/></svg>
-            <p>未发现可清理的注册表项</p>
-            <span>打开本页时会自动扫描一次</span>
+            <p data-i18n="reg.empty">未发现可清理的注册表项</p>
+            <span data-i18n="reg.empty.sub">打开本页时会自动扫描一次</span>
           </div>
         </section>
       </section>
@@ -313,29 +326,29 @@
       <section class="panel" id="tab-custom" role="tabpanel" aria-label="目录规则">
         <div class="panel-head reveal" style="--d:0ms">
           <div class="panel-title">
-            <h2>目录规则</h2>
-            <p class="sub">额外纳入扫描的目录，以及需要跳过不清理的目录</p>
+            <h2 data-i18n="custom.title">目录规则</h2>
+            <p class="sub" data-i18n="custom.sub">额外纳入扫描的目录，以及需要跳过不清理的目录</p>
           </div>
         </div>
         <div class="grid">
           <section class="card reveal" style="--d:40ms">
             <header class="card-head">
-              <h3>自定义扫描目录</h3>
-              <button class="btn btn-sm btn-subtle" id="btn-add-custom">
-                <svg class="icon"><use href="#i-plus"/></svg><span>添加目录</span>
-              </button>
+            <h3 data-i18n="custom.add">自定义扫描目录</h3>
+            <button class="btn btn-sm btn-subtle" id="btn-add-custom">
+              <svg class="icon"><use href="#i-plus"/></svg><span data-i18n="custom.add">添加目录</span>
+            </button>
             </header>
             <ul class="dirlist" id="custom-list"></ul>
           </section>
           <section class="card reveal" style="--d:80ms">
             <header class="card-head">
-              <h3>排除目录</h3>
-              <button class="btn btn-sm btn-subtle" id="btn-add-exclude">
-                <svg class="icon"><use href="#i-plus"/></svg><span>添加排除项</span>
-              </button>
+            <h3 data-i18n="custom.exclude.add">排除目录</h3>
+            <button class="btn btn-sm btn-subtle" id="btn-add-exclude">
+              <svg class="icon"><use href="#i-plus"/></svg><span data-i18n="custom.exclude.add">添加排除项</span>
+            </button>
             </header>
             <ul class="dirlist" id="exclude-list"></ul>
-            <p class="note">排除项按「完整路径段 + 大小写不敏感」匹配，例如 <code>logs</code> 不会误伤 <code>Catalogs</code>。</p>
+            <p class="note" data-i18n="custom.exclude.note">排除项按「完整路径段 + 大小写不敏感」匹配，例如 <code>logs</code> 不会误伤 <code>Catalogs</code>。</p>
           </section>
         </div>
       </section>
@@ -344,16 +357,16 @@
       <section class="panel" id="tab-history" role="tabpanel" aria-label="清理历史">
         <div class="panel-head reveal" style="--d:0ms">
           <div class="panel-title">
-            <h2>清理历史</h2>
-            <p class="sub">按批次分组，点击展开明细</p>
+            <h2 data-i18n="history.title">清理历史</h2>
+            <p class="sub" data-i18n="history.sub">按批次分组，点击展开明细</p>
           </div>
         </div>
         <section class="card reveal" style="--d:40ms">
           <div id="history-groups"></div>
           <div class="empty" id="empty-history">
             <svg class="icon"><use href="#i-empty"/></svg>
-            <p>暂无清理记录</p>
-            <span>清理缓存后这里会记录</span>
+            <p data-i18n="history.empty">暂无清理记录</p>
+            <span data-i18n="history.empty.sub">清理缓存后这里会记录</span>
           </div>
         </section>
       </section>
@@ -362,27 +375,27 @@
       <section class="panel" id="tab-update" role="tabpanel" aria-label="软件更新">
         <div class="panel-head reveal" style="--d:0ms">
           <div class="panel-title">
-            <h2>软件更新</h2>
-            <p class="sub">检查新版本并前往下载；不想立刻更新可稍后提醒或跳过此版本</p>
+            <h2 data-i18n="update.title">软件更新</h2>
+            <p class="sub" data-i18n="update.sub">检查新版本并前往下载；不想立刻更新可稍后提醒或跳过此版本</p>
           </div>
           <div class="actions">
             <button class="btn btn-accent" id="btn-check-update">
-              <svg class="icon"><use href="#i-update"/></svg><span>检查更新</span>
+              <svg class="icon"><use href="#i-update"/></svg><span data-i18n="update.check">检查更新</span>
             </button>
           </div>
         </div>
 
         <section class="card reveal" style="--d:40ms">
           <header class="card-head">
-            <h3>版本信息 <span class="card-hint" id="update-status">未检查</span></h3>
+            <h3><span data-i18n="update.version">版本信息</span> <span class="card-hint" id="update-status">未检查</span></h3>
             <div class="card-actions">
-              <button class="btn btn-sm btn-subtle" id="btn-update-later" disabled>稍后提醒</button>
-              <button class="btn btn-sm btn-subtle" id="btn-update-skip" disabled>跳过此版本</button>
+              <button class="btn btn-sm btn-subtle" id="btn-update-later" disabled data-i18n="update.snooze">稍后提醒</button>
+              <button class="btn btn-sm btn-subtle" id="btn-update-skip" disabled data-i18n="update.skip">跳过此版本</button>
               <button class="btn btn-sm btn-subtle" id="btn-update-download" hidden>
-                <svg class="icon"><use href="#i-update"/></svg><span>后台下载</span>
+                <svg class="icon"><use href="#i-update"/></svg><span data-i18n="update.download">后台下载</span>
               </button>
               <button class="btn btn-sm btn-accent" id="btn-update-now" hidden>
-                <svg class="icon"><use href="#i-update"/></svg><span>更新并重启</span>
+                <svg class="icon"><use href="#i-update"/></svg><span data-i18n="update.restart">更新并重启</span>
               </button>
             </div>
           </header>
@@ -390,10 +403,10 @@
           <div class="table-wrap">
             <table class="hist">
               <tbody>
-                <tr><td>当前版本</td><td id="upd-current">—</td></tr>
-                <tr><td>最新版本</td><td id="upd-latest">—</td></tr>
-                <tr><td>发布时间</td><td id="upd-published">—</td></tr>
-                <tr><td>安装包大小</td><td id="upd-size">—</td></tr>
+                <tr><td data-i18n="update.current">当前版本</td><td id="upd-current">—</td></tr>
+                <tr><td data-i18n="update.latest">最新版本</td><td id="upd-latest">—</td></tr>
+                <tr><td data-i18n="update.published">发布时间</td><td id="upd-published">—</td></tr>
+                <tr><td data-i18n="update.size">安装包大小</td><td id="upd-size">—</td></tr>
               </tbody>
             </table>
           </div>
@@ -401,25 +414,85 @@
           <!-- 下载进度 -->
           <div class="progress-card" id="update-dl-progress" hidden>
             <div class="progress-head">
-              <span class="progress-label" id="update-dl-text">正在下载…</span>
+              <span class="progress-label" id="update-dl-text" data-i18n="update.downloading">正在下载…</span>
               <span class="progress-pct" id="update-dl-pct">0%</span>
             </div>
             <div class="progress-track"><div class="progress-fill" id="update-dl-fill"></div></div>
           </div>
 
           <div class="update-notes" id="update-notes" hidden>
-            <h4>更新说明</h4>
+            <h4 data-i18n="update.notes">更新说明</h4>
             <pre id="update-notes-text"></pre>
           </div>
         </section>
+      </section>
 
-        <div class="callout reveal" style="--d:80ms">
-          <svg class="icon"><use href="#i-info"/></svg>
-          <div>
-            <strong>更新方式：覆盖即可，无需卸载</strong>
-            <span>本程序是单文件绿色软件，下载新版本 exe 覆盖旧文件即完成更新。目录规则、排除项与清理历史保存在 <code>%APPDATA%\CacheCleaner</code>，不会因更新丢失。</span>
+      <!-- ══ 软件卸载（内置功能） ══ -->
+      <section class="panel" id="tab-uninstaller" role="tabpanel" aria-label="软件卸载">
+        <div class="panel-head reveal" style="--d:0ms">
+          <div class="panel-title">
+            <h2 data-i18n="uninstall.title">软件卸载</h2>
+            <p class="sub" data-i18n="uninstall.sub">枚举已安装软件，深度卸载 + 残留清理 + 流氓软件识别</p>
+          </div>
+          <div class="actions">
+            <button class="btn btn-accent" id="btn-uninstall-refresh">
+              <svg class="icon"><use href="#i-scan"/></svg><span data-i18n="uninstall.refresh">刷新列表</span>
+            </button>
           </div>
         </div>
+
+        <div class="callout reveal" style="--d:40ms" id="pup-callout" hidden>
+          <svg class="icon"><use href="#i-warning"/></svg>
+          <div>
+            <strong data-i18n="uninstall.pup">流氓软件</strong>
+            <span id="pup-callout-text"></span>
+          </div>
+        </div>
+
+        <section class="card reveal" style="--d:80ms">
+          <div class="list" id="uninstall-list" style="max-height:none"></div>
+          <div class="empty" id="empty-uninstall">
+            <svg class="icon"><use href="#i-empty"/></svg>
+            <p data-i18n="uninstall.empty">未发现已安装的软件</p>
+          </div>
+        </section>
+      </section>
+
+      <!-- ══ 插件管理 ══ -->
+      <section class="panel" id="tab-plugins" role="tabpanel" aria-label="插件管理">
+        <div class="panel-head reveal" style="--d:0ms">
+          <div class="panel-title">
+            <h2 data-i18n="nav.plugins.manage">插件管理</h2>
+            <p class="sub" data-i18n="plugin.mgr.sub">插件放在程序目录 plugins 文件夹，支持启用 / 禁用</p>
+          </div>
+          <div class="actions">
+            <button class="btn btn-accent" id="btn-plugin-install">
+              <svg class="icon"><use href="#i-plus"/></svg><span data-i18n="plugin.mgr.install">安装插件</span>
+            </button>
+            <button class="btn btn-subtle" id="btn-plugin-reload">
+              <svg class="icon"><use href="#i-scan"/></svg><span data-i18n="plugin.mgr.reload">重新扫描</span>
+            </button>
+            <button class="btn btn-subtle" id="btn-plugin-openfolder">
+              <svg class="icon"><use href="#i-folder"/></svg><span data-i18n="plugin.mgr.openfolder">打开插件目录</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="callout reveal" style="--d:40ms">
+          <svg class="icon"><use href="#i-info"/></svg>
+          <div>
+            <strong data-i18n="plugin.mgr.hint.title">如何开发插件？</strong>
+            <span data-i18n="plugin.mgr.hint.msg">插件是一个包含 manifest.json 的文件夹。点击「安装插件」选择文件夹即可安装到插件目录；插件通过调用主程序内置「能力」（如软件卸载）实现功能。</span>
+          </div>
+        </div>
+
+        <section class="card reveal" style="--d:80ms">
+          <div id="plugin-mgr-list"></div>
+          <div class="empty" id="empty-plugins">
+            <svg class="icon"><use href="#i-empty"/></svg>
+            <p data-i18n="plugin.mgr.empty">未发现任何插件</p>
+          </div>
+        </section>
       </section>
 
     </main>
@@ -432,13 +505,13 @@
     <div class="dialog-body">
       <span class="dialog-icon"><svg class="icon"><use href="#i-warning"/></svg></span>
       <div class="dialog-text">
-        <h3 id="modal-title">确认操作</h3>
+        <h3 id="modal-title" data-i18n="btn.confirm">确认操作</h3>
         <p id="modal-text"></p>
       </div>
     </div>
     <div class="dialog-actions">
-      <button class="btn btn-subtle" id="modal-cancel">取消</button>
-      <button class="btn btn-danger" id="modal-ok">确认清理</button>
+      <button class="btn btn-subtle" id="modal-cancel" data-i18n="btn.cancel">取消</button>
+      <button class="btn btn-danger" id="modal-ok" data-i18n="btn.ok">确认清理</button>
     </div>
   </div>
 </div>
@@ -449,19 +522,19 @@
     <div class="about-head">
       <span class="brand-mark lg"><svg class="icon"><use href="#i-sparkle"/></svg></span>
       <div>
-        <h3>智能缓存清理工具</h3>
-        <p>跨平台 · 安全分级 · 一键释放空间</p>
+        <h3 data-i18n="app.name">智能缓存清理工具</h3>
+        <p data-i18n="app.tagline">跨平台 · 安全分级 · 一键释放空间</p>
       </div>
     </div>
     <ul class="about-list">
-      <li><span>版本</span><strong id="about-version">v1.1</strong></li>
-      <li><span>引擎</span><strong>Go 原生扫描 + Electron 结构识别</strong></li>
-      <li><span>支持</span><strong>Windows / macOS / Linux</strong></li>
-      <li><span>清理范围</span><strong>AI 缓存 · 升级缓存 · 注册表垃圾</strong></li>
+      <li><span data-i18n="about.version">版本</span><strong id="about-version">v1.1</strong></li>
+      <li><span data-i18n="about.engine">引擎</span><strong data-i18n="about.engine.value">Go 原生扫描 + Electron 结构识别</strong></li>
+      <li><span data-i18n="about.support">支持</span><strong>Windows / macOS / Linux</strong></li>
+      <li><span data-i18n="about.scope">清理范围</span><strong data-i18n="about.scope.value">AI 缓存 · 升级缓存 · 注册表垃圾</strong></li>
     </ul>
-    <p class="about-tip">风险分级：<em class="tag ok">安全</em> 可放心清理，<em class="tag warn">谨慎</em> / <em class="tag risk">复核</em> 请确认后操作。</p>
+    <p class="about-tip"><span data-i18n="about.tip.prefix">风险分级：</span><em class="tag ok" data-i18n="risk.safe">安全</em><span data-i18n="about.tip.safe"> 可放心清理，</span><em class="tag warn" data-i18n="risk.caution">谨慎</em> / <em class="tag risk" data-i18n="risk.review">复核</em><span data-i18n="about.tip.suffix"> 请确认后操作。</span></p>
     <div class="dialog-actions">
-      <button class="btn btn-accent" id="about-close">知道了</button>
+      <button class="btn btn-accent" id="about-close" data-i18n="about.close">知道了</button>
     </div>
   </div>
 </div>
@@ -472,18 +545,18 @@
     <div class="dialog-body">
       <span class="dialog-icon"><svg class="icon"><use href="#i-update"/></svg></span>
       <div class="dialog-text">
-        <h3 id="update-alert-title">发现新版本</h3>
+        <h3 id="update-alert-title" data-i18n="dialog.update.title">发现新版本</h3>
         <p id="update-alert-text"></p>
       </div>
     </div>
     <div class="dialog-actions">
-      <button class="btn btn-subtle" id="btn-alert-skip">跳过此版本</button>
-      <button class="btn btn-subtle" id="btn-alert-later">稍后提醒</button>
+      <button class="btn btn-subtle" id="btn-alert-skip" data-i18n="update.skip">跳过此版本</button>
+      <button class="btn btn-subtle" id="btn-alert-later" data-i18n="update.snooze">稍后提醒</button>
       <button class="btn btn-subtle" id="btn-alert-download">
-        <svg class="icon"><use href="#i-update"/></svg><span>后台下载</span>
+        <svg class="icon"><use href="#i-update"/></svg><span data-i18n="update.download">后台下载</span>
       </button>
       <button class="btn btn-accent" id="btn-alert-now">
-        <svg class="icon"><use href="#i-update"/></svg><span>前往下载</span>
+        <svg class="icon"><use href="#i-update"/></svg><span data-i18n="update.manual.download">前往下载</span>
       </button>
     </div>
   </div>
@@ -494,7 +567,7 @@
   <span class="taskbar-icon"><svg class="icon"><use href="#i-trash"/></svg></span>
   <div class="taskbar-body">
     <div class="taskbar-head">
-      <span id="clean-text">清理中…</span>
+      <span id="clean-text" data-i18n="scan.cleaning">清理中…</span>
       <span class="progress-pct" id="clean-pct">0%</span>
     </div>
     <div class="progress-track"><div class="progress-fill" id="clean-fill"></div></div>
@@ -504,6 +577,7 @@
 
 <div class="toast" id="toast" hidden></div>
 
+<script src="/i18n.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

@@ -27,6 +27,9 @@ CacheCleaner/history.json
 CacheCleaner.log
 CacheCleaner.old.log
 
+# 运行时插件目录（exe 旁生成，用户安装的插件放这里，勿提交）
+/plugins/
+
 # 临时文件
 *.tmp
 *.zip

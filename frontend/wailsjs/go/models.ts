@@ -218,3 +218,123 @@ export namespace main {
 
 }
 
+export namespace plugins {
+	
+	export class PluginState {
+	    id: string;
+	    nameZh: string;
+	    nameEn: string;
+	    icon: string;
+	    descZh: string;
+	    descEn: string;
+	    type: string;
+	    entry: string;
+	    version: string;
+	    author: string;
+	    enabled: boolean;
+	    dir: string;
+	    manifest: string;
+	    valid: boolean;
+	    errMsg: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PluginState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.nameZh = source["nameZh"];
+	        this.nameEn = source["nameEn"];
+	        this.icon = source["icon"];
+	        this.descZh = source["descZh"];
+	        this.descEn = source["descEn"];
+	        this.type = source["type"];
+	        this.entry = source["entry"];
+	        this.version = source["version"];
+	        this.author = source["author"];
+	        this.enabled = source["enabled"];
+	        this.dir = source["dir"];
+	        this.manifest = source["manifest"];
+	        this.valid = source["valid"];
+	        this.errMsg = source["errMsg"];
+	    }
+	}
+	export class ScriptResult {
+	    title: string;
+	    text: string;
+	    html: string;
+	    logs: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ScriptResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title = source["title"];
+	        this.text = source["text"];
+	        this.html = source["html"];
+	        this.logs = source["logs"];
+	    }
+	}
+
+}
+
+export namespace uninstaller {
+	
+	export class App {
+	    key: string;
+	    name: string;
+	    version: string;
+	    publisher: string;
+	    installDate: string;
+	    installDir: string;
+	    size: number;
+	    uninstall: string;
+	    pup: boolean;
+	    pupReason: string;
+	    is64: boolean;
+	    hcu: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new App(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.name = source["name"];
+	        this.version = source["version"];
+	        this.publisher = source["publisher"];
+	        this.installDate = source["installDate"];
+	        this.installDir = source["installDir"];
+	        this.size = source["size"];
+	        this.uninstall = source["uninstall"];
+	        this.pup = source["pup"];
+	        this.pupReason = source["pupReason"];
+	        this.is64 = source["is64"];
+	        this.hcu = source["hcu"];
+	    }
+	}
+	export class UninstallResult {
+	    success: boolean;
+	    message: string;
+	    residues: string[];
+	    regResidue: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new UninstallResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.message = source["message"];
+	        this.residues = source["residues"];
+	        this.regResidue = source["regResidue"];
+	    }
+	}
+
+}
+

@@ -33,7 +33,14 @@ const fmtTime = (iso) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-const riskClass = (r) => ({ '安全': 'ok', '谨慎': 'warn', '复核': 'risk' }[r] || '');
+const riskClass = (r) => {
+  // 后端传中文标签，前端按当前语言翻译显示
+  const map = { '安全': 'risk.safe', '谨慎': 'risk.caution', '复核': 'risk.review' };
+  const key = map[r];
+  if (!key) return '';
+  const label = t(key);
+  return { '安全': 'ok', '谨慎': 'warn', '复核': 'risk' }[r] || '';
+};
 
 const show = (el, on) => { if (el) el.hidden = !on; };
 const toggleEmpty = (el, on) => { if (el) el.classList.toggle('is-shown', !!on); };
@@ -92,6 +99,41 @@ function initTheme() {
       if (!pref) applyTheme(e.matches ? 'dark' : 'light');
     });
   }
+}
+
+/* ── 语言切换（i18n） ──────────────────────────────────────────────── */
+
+// 切换语言后重新渲染当前面板（动态内容）
+function rerenderCurrentPanel() {
+  const active = $('.panel.is-active');
+  if (!active) return;
+  switch (active.id) {
+    case 'tab-scan':
+      renderList(); renderChart(); renderKpis();
+      break;
+    case 'tab-registry':
+      renderRegList();
+      break;
+    case 'tab-custom':
+      refreshDirs();
+      break;
+    case 'tab-history':
+      refreshHistory();
+      break;
+    case 'tab-update':
+      if (lastUpdateInfo) renderUpdate(lastUpdateInfo);
+      break;
+    case 'tab-uninstaller':
+      renderUninstaller();
+      break;
+    default:
+      break;
+  }
+}
+
+function initLang() {
+  applyI18n();
+  $('#btn-lang').onclick = () => { toggleLang(); };
 }
 
 /* ── Toast / 确认对话框 ─────────────────────────────────────────────── */
@@ -639,11 +681,11 @@ async function onRemoveDir(ev) {
 }
 
 $('#btn-add-custom').onclick = async () => {
-  const p = await window.runtime.OpenDirectoryDialog({ Title: '选择要扫描的自定义目录' });
+  const p = await call('ChooseDirectory', '选择要扫描的自定义目录');
   if (p) { await call('AddCustomDir', p); refreshDirs(); }
 };
 $('#btn-add-exclude').onclick = async () => {
-  const p = await window.runtime.OpenDirectoryDialog({ Title: '选择要排除的目录' });
+  const p = await call('ChooseDirectory', '选择要排除的目录');
   if (p) { await call('AddExcludeDir', p); refreshDirs(); }
 };
 
@@ -1144,12 +1186,345 @@ async function refreshUpdate() {
   } catch (e) { /* 静默 */ }
 }
 
-/* ── 入口 ───────────────────────────────────────────────────────────── */
+/* ── 插件系统 ─────────────────────────────────────────────────────── */
+
+let uninstallApps = []; // 卸载插件：软件列表缓存
+
+// 初始化插件：查询已启用插件，注入侧边栏入口 + 管理界面
+async function initPlugins() {
+  await renderPluginRail();
+  await renderPluginMgr();
+}
+
+// 注入侧边栏「插件」分组的脚本插件入口（仅已启用且有效的脚本型插件）
+async function renderPluginRail() {
+  let list = [];
+  try { list = await call('ListPlugins') || []; } catch (e) { return; }
+  // 只注入脚本型插件（能力型插件已移除，功能型扩展由开发者内置到主程序）
+  const enabled = list.filter((p) => p.valid && p.enabled && p.type === 'script');
+
+  const slot = $('#rail-plugin-slot');
+  if (!slot) return;
+  slot.innerHTML = '';
+  if (!enabled.length) return;
+
+  for (const p of enabled) {
+    const name = currentLang === 'zh-CN' ? p.nameZh : p.nameEn;
+    const tabId = 'script-' + p.id;
+    const btn = document.createElement('button');
+    btn.className = 'rail-item';
+    btn.dataset.tab = tabId;
+    btn.dataset.pluginId = p.id;
+    btn.innerHTML = `<svg class="icon"><use href="#${p.icon || 'i-layers'}"/></svg><span>${esc(name)}</span>`;
+    btn.onclick = async () => {
+      // 关键：先加载内容（脚本执行完、内容已填好），再切换面板。
+      // 这样切换时新面板内容已经是完整的，绝不会出现「旧面板已隐藏、
+      // 新面板还是空白」的闪屏帧。脚本通常只要几十毫秒，用户无感。
+      await loadScriptPlugin(p.id);
+
+      $$('.rail-item').forEach((x) => { x.classList.remove('is-active'); x.removeAttribute('aria-current'); });
+      btn.classList.add('is-active');
+      btn.setAttribute('aria-current', 'page');
+      // 内容已就绪，再切换面板（此时 ensureScriptPanel 已确保面板存在）
+      ensureScriptPanel(p.id);
+      $$('.panel').forEach((pl) => pl.classList.toggle('is-active', pl.id === 'tab-' + tabId));
+    };
+    slot.appendChild(btn);
+
+    // 预热：预先创建面板 DOM（不执行脚本、不激活），让 WebView2 提前完成
+    // 首次光栅化/合成层缓存。这样用户点击时面板已存在，只是 toggle 显示，
+    // 避免「动态插入新元素触发整窗重绘」的闪屏（重启后首次点击才闪的根因）。
+    ensureScriptPanel(p.id);
+  }
+}
+
+// 确保脚本插件面板已创建（同步，幂等）。返回面板 DOM。
+// 分离「创建面板」与「加载内容」：创建必须同步完成，保证切换 tab 时面板已存在，
+// 不会出现「旧面板已隐藏、新面板未创建」的空白帧闪屏。
+function ensureScriptPanel(id) {
+  let panel = $('#tab-script-' + id);
+  if (panel) return panel;
+  panel = document.createElement('section');
+  panel.className = 'panel';
+  panel.id = 'tab-script-' + id;
+  panel.setAttribute('role', 'tabpanel');
+  panel.innerHTML = `
+    <div class="panel-head reveal" style="--d:0ms">
+      <div class="panel-title">
+        <h2 id="script-title-${id}"></h2>
+        <p class="sub" id="script-sub-${id}"></p>
+      </div>
+      <div class="actions">
+        <button class="btn btn-subtle" id="script-reload-${id}">
+          <svg class="icon"><use href="#i-scan"/></svg><span data-i18n="plugin.mgr.reload">重新扫描</span>
+        </button>
+      </div>
+    </div>
+    <section class="card reveal" style="--d:40ms">
+      <div id="script-body-${id}"></div>
+      <div class="empty" id="script-empty-${id}" hidden>
+        <svg class="icon"><use href="#i-empty"/></svg>
+        <p></p>
+      </div>
+    </section>
+  `;
+  document.querySelector('main .container, main').appendChild(panel);
+  const reloadBtn = panel.querySelector(`#script-reload-${id}`);
+  reloadBtn.onclick = () => { panel.dataset.loaded = '0'; loadScriptPlugin(id); };
+  return panel;
+}
+
+// 加载脚本插件内容（异步）：执行脚本并渲染结果。
+async function loadScriptPlugin(id) {
+  const panel = ensureScriptPanel(id);
+  const body = panel.querySelector(`#script-body-${id}`);
+  const empty = panel.querySelector(`#script-empty-${id}`);
+  const titleEl = panel.querySelector(`#script-title-${id}`);
+
+  // 复用已有面板时不重新执行脚本、不闪屏；仅首次（或显式"重新扫描"）才加载。
+  if (panel.dataset.loaded === '1') {
+    return;
+  }
+  panel.dataset.loaded = '1';
+  body.innerHTML = '';
+  empty.hidden = true;
+
+  let res;
+  try {
+    res = await call('RunPluginScript', id);
+  } catch (e) {
+    empty.hidden = false;
+    empty.querySelector('p').textContent = '插件执行失败: ' + e;
+    return;
+  }
+  titleEl.textContent = res.title || id;
+  // 直接渲染内容（无动画、无骨架屏，避免 WebView2 整窗重绘闪烁）
+  if (res.html) {
+    body.innerHTML = res.html;
+  } else if (res.text) {
+    body.textContent = res.text;
+  }
+  // 日志（若有）追加到正文下方
+  if (res.logs && res.logs.length) {
+    const logBox = document.createElement('pre');
+    logBox.className = 'plugin-logs';
+    logBox.textContent = res.logs.join('\n');
+    body.appendChild(logBox);
+  }
+  if (!res.html && !res.text && !(res.logs && res.logs.length)) {
+    empty.hidden = false;
+    empty.querySelector('p').textContent = '插件未输出任何内容';
+  }
+}
+
+// 渲染插件管理界面（列表 + 启用/禁用开关 + 详情）。
+// 只展示脚本型插件（type=script）；功能性扩展由开发者内置到主程序，不在插件系统出现。
+async function renderPluginMgr() {
+  let list = [];
+  try { list = await call('ListPlugins') || []; } catch (e) { list = []; }
+  // 只保留脚本型插件
+  list = list.filter((p) => p.type === 'script');
+
+  const wrap = $('#plugin-mgr-list');
+  const empty = $('#empty-plugins');
+  if (!wrap) return;
+
+  toggleEmpty(empty, list.length === 0);
+  if (!list.length) { wrap.innerHTML = ''; return; }
+
+  wrap.innerHTML = list.map((p) => {
+    const name = currentLang === 'zh-CN' ? p.nameZh : p.nameEn;
+    const desc = currentLang === 'zh-CN' ? p.descZh : p.descEn;
+    const bad = !p.valid
+      ? `<em class="badge risk">${esc(p.errMsg || '无效')}</em>`
+      : '';
+    const ver = p.version ? `<span class="card-hint">v${esc(p.version)}</span>` : '';
+    const author = p.author ? `<span class="card-hint">${esc(p.author)}</span>` : '';
+    return `<div class="plugin-row" data-id="${esc(p.id)}">
+      <div class="plugin-info">
+        <div class="plugin-name">${esc(name)} ${ver} ${author} ${bad}</div>
+        ${desc ? `<div class="plugin-desc">${esc(desc)}</div>` : ''}
+      </div>
+      <div class="plugin-actions">
+        <button class="btn btn-sm btn-danger" data-plugin-remove>${t('plugin.mgr.uninstall')}</button>
+        <label class="plugin-switch">
+          <input type="checkbox" data-plugin-toggle ${p.enabled ? 'checked' : ''} ${p.valid ? '' : 'disabled'}>
+          <span class="switch-track"></span>
+        </label>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// 插件管理：启用/禁用开关（事件委托）
+$('#plugin-mgr-list').addEventListener('change', async (ev) => {
+  const cb = ev.target.closest('input[data-plugin-toggle]');
+  if (!cb) return;
+  const row = cb.closest('.plugin-row');
+  const id = row.dataset.id;
+  await call('SetPluginEnabled', id, cb.checked);
+  toast(cb.checked ? t('plugin.mgr.enabled') : t('plugin.mgr.disabled'));
+  await renderPluginRail(); // 刷新侧边栏入口
+});
+
+// 插件管理：卸载按钮（事件委托）
+$('#plugin-mgr-list').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button[data-plugin-remove]');
+  if (!btn) return;
+  const row = btn.closest('.plugin-row');
+  const id = row.dataset.id;
+  const ok = await confirmModal(
+    t('plugin.mgr.uninstall.confirm', { id }),
+    t('plugin.mgr.uninstall'));
+  if (!ok) return;
+  const err = await call('UninstallPlugin', id);
+  if (err) { toast(err); return; }
+  toast(t('plugin.mgr.uninstalled'));
+  await renderPluginMgr();
+  await renderPluginRail();
+});
+
+// 安装插件：选择源目录（含 manifest.json）复制到插件目录
+$('#btn-plugin-install').onclick = async () => {
+  const dir = await call('ChooseDirectory', t('plugin.mgr.install.title'));
+  if (!dir) return;
+  const err = await call('InstallPlugin', dir);
+  if (err) { toast(err); return; }
+  toast(t('plugin.mgr.installed'));
+  await renderPluginMgr();
+  await renderPluginRail();
+};
+
+// 重新扫描 + 打开插件目录
+$('#btn-plugin-reload').onclick = async () => {
+  await renderPluginMgr();
+  await renderPluginRail();
+  toast(t('plugin.mgr.reloaded'));
+};
+$('#btn-plugin-openfolder').onclick = () => call('OpenPluginDir');
+
+// 插件管理 tab 加载器
+TAB_LOADERS.plugins = () => { renderPluginMgr(); renderPluginRail(); };
+
+// 软件卸载插件面板渲染
+async function renderUninstaller() {
+  const list = $('#uninstall-list');
+  const empty = $('#empty-uninstall');
+  if (!list) return;
+
+  try {
+    uninstallApps = await call('ListUninstallApps') || [];
+  } catch (e) {
+    uninstallApps = [];
+  }
+
+  if (!uninstallApps.length) {
+    list.innerHTML = '';
+    toggleEmpty(empty, true);
+    return;
+  }
+  toggleEmpty(empty, false);
+
+  list.innerHTML = uninstallApps.map((a) => {
+    const pup = a.pup
+      ? `<em class="badge risk" title="${esc(a.pupReason)}">${t('uninstall.pup')}</em>`
+      : '';
+    const size = a.size ? `<span class="size">${fmtSize(a.size)}</span>` : '<span class="size">—</span>';
+    // 版本号：同名软件（如新旧两个微信）靠它区分，附加在名称后用小字显示
+    const ver = a.version ? `<span class="ver">${esc(a.version)}</span>` : '';
+    return `<div class="row" data-key="${esc(a.key)}">
+      <span class="path" title="${esc(a.name)}">${esc(a.name)} ${ver}</span>
+      ${size}
+      <span class="cat" title="${esc(a.publisher || '')}">${esc(a.publisher || '')}</span>
+      ${pup}
+      <button class="btn btn-sm btn-subtle" data-act="uninstall">${t('uninstall.uninstall')}</button>
+      ${a.pup ? `<button class="btn btn-sm btn-danger" data-act="force">${t('uninstall.force')}</button>` : ''}
+    </div>`;
+  }).join('');
+
+  // PUP 警告条
+  const pups = uninstallApps.filter((a) => a.pup);
+  const callout = $('#pup-callout');
+  if (callout) {
+    show(callout, pups.length > 0);
+    if (pups.length) {
+      $('#pup-callout-text').textContent =
+        t('uninstall.pup.warn', { reason: pups[0].pupReason }) +
+        (pups.length > 1 ? `（共 ${pups.length} 个可疑软件，已置顶显示）` : '');
+    }
+  }
+}
+
+// 卸载按钮事件委托
+$('#uninstall-list').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button[data-act]');
+  if (!btn) return;
+  const row = btn.closest('.row');
+  const key = row.dataset.key;
+  const app = uninstallApps.find((a) => a.key === key);
+  if (!app) return;
+
+  if (btn.dataset.act === 'force') {
+    const ok = await confirmModal(
+      t('uninstall.confirm', { name: app.name }) + '\n\n' +
+      t('uninstall.pup.warn', { reason: app.pupReason }),
+      t('uninstall.force'));
+    if (!ok) return;
+    toast(t('uninstall.uninstalling'));
+    const res = await call('ForceUninstallApp', key);
+    toast(res.success ? t('uninstall.done.toast', { name: app.name }) : res.message);
+    renderUninstaller();
+  } else {
+    const ok = await confirmModal(
+      t('uninstall.confirm', { name: app.name }),
+      t('uninstall.uninstall'));
+    if (!ok) return;
+    toast(t('uninstall.uninstalling'));
+    const res = await call('UninstallApp', key);
+    if (res.success) {
+      toast(t('uninstall.done.toast', { name: app.name }));
+      if ((res.residues || []).length || (res.regResidue || []).length) {
+        const note = (res.residues || []).concat(res.regResidue || []).slice(0, 6).join('\n');
+        // 用确认框而非信息框：残留清理由用户决定，不打断刚完成的卸载
+        const clean = await confirmModal(
+          t('uninstall.done.detail', { name: app.name }) + '\n\n' + note,
+          t('uninstall.done'));
+        if (clean) {
+          // 卸载成功后注册表键已被删，无法再用 key 定位软件，
+          // 这里直接传卸载时扫描出的残留路径删除（不依赖注册表）。
+          const fres = await call('CleanResidueApp', app.name, res.residues || [], res.regResidue || []);
+          toast(fres.success ? (t('uninstall.residue.cleaned') || '残留已清理') : fres.message);
+        }
+      }
+    } else {
+      toast(res.message || t('uninstall.failed'));
+      // 卸载未完成：引导用户确认是否强制卸载（深度清理残留）
+      const ok = await confirmModal(
+        t('uninstall.notdone', { name: app.name, msg: res.message }),
+        t('uninstall.force'));
+      if (ok) {
+        const fres = await call('ForceUninstallApp', key);
+        toast(fres.success ? t('uninstall.done.toast', { name: app.name }) : fres.message);
+      }
+    }
+    renderUninstaller();
+  }
+});
+
+$('#btn-uninstall-refresh').onclick = async () => {
+  toast(t('scan.scanning'));
+  await renderUninstaller();
+};
+
+// 插件 tab 加载器
+TAB_LOADERS.uninstaller = () => { if (!uninstallApps.length) renderUninstaller(); };
 
 $('#btn-ai').onclick = () => startScan('ai');
 $('#btn-all').onclick = () => startScan('all');
 
 initTheme();
+initLang();          // 多语言（必须在渲染前应用一次 data-i18n）
+initPlugins();       // 插件系统：注册侧边栏入口 + 面板
 renderKpis();
 renderChart();
 refreshDirs();

@@ -227,9 +227,8 @@ button { font: inherit; color: inherit; }
 
 /* ── 5. 内容区 ─────────────────────────────────────────────────────────── */
 .content {
-  min-width: 0; overflow-y: auto; overflow-x: hidden;
+  min-width: 0; overflow-y: scroll; overflow-x: hidden;
   padding: 10px 26px 36px;
-  scroll-behavior: smooth;
 }
 .panel { display: none; }
 .panel.is-active { display: block; animation: panel-in var(--t-slow) var(--ease-out); }
@@ -425,6 +424,8 @@ button { font: inherit; color: inherit; }
 .row .cat { width: 128px; flex: none; color: var(--text-2); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row .path { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row .desc { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 软件卸载列表里的版本号：次要色小字，用于区分同名软件（新旧微信等） */
+.row .ver { color: var(--text-3); font-size: 12px; font-weight: 400; margin-left: 6px; }
 
 /* macOS 复选框：圆形 + 勾选弹性动画 */
 .row input[type="checkbox"] {
@@ -814,4 +815,57 @@ button { font: inherit; color: inherit; }
   line-height: 1.6;
   color: var(--text-2);
   font-family: var(--font);
+}
+
+/* ── 插件：软件卸载列表 ─────────────────────────────────────────────── */
+#uninstall-list .row { min-height: 48px; gap: 10px; }
+#uninstall-list .row .path { font-weight: 600; }
+#uninstall-list .row .btn { flex: none; }
+#uninstall-list .row .cat { max-width: 200px; }
+#uninstall-list .badge.risk { flex: none; }
+
+/* ── 插件管理 ─────────────────────────────────────────────────────────── */
+.plugin-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 16px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--stroke);
+  margin-bottom: 8px;
+  transition: background var(--t-fast) var(--ease-out);
+}
+.plugin-row:hover { background: var(--fill-hover); }
+.plugin-info { flex: 1; min-width: 0; }
+.plugin-name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.plugin-desc { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+.plugin-desc code { font-family: ui-monospace, Consolas, monospace; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--fill-subtle); }
+
+/* 开关 */
+.plugin-switch { position: relative; flex: none; cursor: pointer; }
+.plugin-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch-track {
+  display: block; width: 40px; height: 22px; border-radius: 999px;
+  background: var(--fill-hover); border: 1px solid var(--stroke-strong);
+  transition: background var(--t-fast) var(--ease-out);
+  position: relative;
+}
+.switch-track::after {
+  content: ""; position: absolute; left: 2px; top: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  transition: transform var(--t-fast) var(--ease-out);
+}
+.plugin-switch input:checked + .switch-track { background: var(--accent); border-color: var(--accent); }
+.plugin-switch input:checked + .switch-track::after { transform: translateX(18px); }
+.plugin-switch input:disabled + .switch-track { opacity: .4; cursor: not-allowed; }
+
+/* 插件操作区：卸载按钮 + 开关 */
+.plugin-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+
+/* 脚本插件面板 */
+.plugin-logs {
+  margin-top: 12px; padding: 10px 12px;
+  background: var(--fill-subtle); border: 1px solid var(--stroke);
+  border-radius: var(--r-control);
+  font-family: ui-monospace, Consolas, monospace; font-size: 12px;
+  color: var(--text-2); white-space: pre-wrap; word-break: break-all;
 }

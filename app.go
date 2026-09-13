@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -14,11 +15,16 @@ import (
 	"cachecleaner/internal/dismclean"
 	"cachecleaner/internal/filelock"
 	"cachecleaner/internal/model"
+	"cachecleaner/internal/plugins"
 	"cachecleaner/internal/regclean"
 	"cachecleaner/internal/scan"
+	"cachecleaner/internal/uninstaller"
 	"cachecleaner/internal/update"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// uninstallerSvc 是软件卸载功能单例（内置功能，非插件）。
+var uninstallerSvc = &uninstaller.Service{}
 
 //go:embed all:frontend/dist
 var assets embed.FS
@@ -719,6 +725,102 @@ func (a *App) StartComponentRepair() string {
 // 前端报错从此不再不可见。
 func (a *App) LogFrontend(msg string) {
 	applog.Error("前端: %s", msg)
+}
+
+// ── 插件系统 ──
+
+// ListPlugins 返回全部插件（含启用状态与有效性）。
+func (a *App) ListPlugins() []plugins.PluginState {
+	return plugins.LoadAll()
+}
+
+// RunPluginScript 执行脚本型插件的入口脚本，返回渲染结果（title/text/html/logs）。
+// 供前端在打开脚本插件面板时调用。
+func (a *App) RunPluginScript(id string) *plugins.ScriptResult {
+	for _, p := range plugins.LoadAll() {
+		if p.ID == id && p.IsScript() {
+			res, err := plugins.RunScript(p.Descriptor)
+			if err != nil {
+				applog.Error("执行脚本插件失败: %v", err)
+				return &plugins.ScriptResult{Title: p.NameZh, Text: "插件执行失败: " + err.Error()}
+			}
+			return res
+		}
+	}
+	applog.Error("RunPluginScript: 未找到脚本插件 id=%s", id)
+	return &plugins.ScriptResult{Title: id, Text: "插件不存在或不是脚本型插件"}
+}
+
+// SetPluginEnabled 启用/禁用插件。日志在 plugins.SetEnabled 内部记录。
+func (a *App) SetPluginEnabled(id string, enabled bool) {
+	_ = plugins.SetEnabled(id, enabled)
+}
+
+// OpenPluginDir 在资源管理器中打开插件目录。
+func (a *App) OpenPluginDir() {
+	dir := plugins.PluginDir()
+	if dir == "" {
+		return
+	}
+	_ = os.MkdirAll(dir, 0o755)
+	// 用系统资源管理器打开目录（BrowserOpenURL 只允许 http/https，file:// 会被 Wails 拦截报 Invalid URL scheme）
+	openExplorer(dir)
+}
+
+// ChooseDirectory 弹出原生目录选择对话框，返回用户选择的绝对路径（取消返回空串）。
+// 前端 window.runtime 不提供目录选择对话框（Wails v2 由 Go 侧 runtime.OpenDirectoryDialog 提供），
+// 故封装成绑定方法供前端调用。
+func (a *App) ChooseDirectory(title string) string {
+	if a.ctx == nil {
+		return ""
+	}
+	opts := runtime.OpenDialogOptions{Title: title}
+	dir, err := runtime.OpenDirectoryDialog(a.ctx, opts)
+	if err != nil {
+		applog.Error("打开目录选择框失败: %v", err)
+		return ""
+	}
+	return dir
+}
+
+// InstallPlugin 安装插件：选择源目录（含 manifest.json）复制到插件目录。
+// 返回错误信息（成功返回空串）。日志在 plugins.Install 内部记录。
+func (a *App) InstallPlugin(srcDir string) string {
+	if err := plugins.Install(srcDir); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+// UninstallPlugin 卸载插件：删除插件目录并移除启用状态。
+// 返回错误信息（成功返回空串）。日志在 plugins.Uninstall 内部记录。
+func (a *App) UninstallPlugin(id string) string {
+	if err := plugins.Uninstall(id); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+// ListUninstallApps 软件卸载能力：枚举全部已安装软件。
+func (a *App) ListUninstallApps() []uninstaller.App {
+	return uninstallerSvc.ListApps()
+}
+
+// UninstallApp 软件卸载能力：执行卸载（静默优先，Geek 式残留扫描）。
+// 日志在 uninstaller.Service.Uninstall 内部记录。
+func (a *App) UninstallApp(key string) uninstaller.UninstallResult {
+	return uninstallerSvc.Uninstall(key)
+}
+
+// ForceUninstallApp 软件卸载能力：强制卸载（卸载器 + 注册表/目录深度残留清理）。
+// 日志在 uninstaller.Service.ForceUninstall 内部记录。
+func (a *App) ForceUninstallApp(key string) uninstaller.UninstallResult {
+	return uninstallerSvc.ForceUninstall(key)
+}
+
+// CleanResidueApp 直接删除残留路径（卸载成功后清理缓存用，不依赖注册表键）。
+func (a *App) CleanResidueApp(name string, dirs []string, regs []string) uninstaller.UninstallResult {
+	return uninstallerSvc.CleanResidue(name, dirs, regs)
 }
 
 // watchDismJob 后台轮询提权作业进度并广播 dism:progress 事件，结束时附带分析报告。
