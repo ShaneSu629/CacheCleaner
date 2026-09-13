@@ -135,28 +135,41 @@ func (a *App) startup(ctx context.Context) {
 	// 清理上次更新残留（CacheCleaner.old.exe）：更新中断时兜底
 	update.CleanupOld()
 
-	// 启动后延迟自动检查更新：走后台 goroutine，失败或处于静默期都不打扰用户。
-	// 发现新版本且未跳过时自动开始后台下载（商业软件式静默下载），
-	// 下载完成后前端弹提示，用户点「更新并重启」即可完成更新。
+	// 更新检查：启动后先延迟 5 秒检查一次（等前端注册 update:info 监听），
+	// 之后每 1 小时循环检查。发现新版本且未跳过时自动后台下载，下载完成后前端弹提示。
 	go func() {
+		// 首次检查：稍作延迟，确保前端已注册事件监听，避免首次结果丢失
 		time.Sleep(5 * time.Second)
-		info, err := update.Check(false)
-		if err != nil {
-			applog.Error("启动检查更新失败: %v", err)
-			return
+		a.checkUpdateOnce()
+
+		// 后续每隔 1 小时循环检查
+		ticker := time.NewTicker(update.CheckInterval())
+		defer ticker.Stop()
+		for range ticker.C {
+			a.checkUpdateOnce()
 		}
-		if info.HasUpdate {
-			applog.Info("发现新版本: %s -> %s", info.Current, info.Latest)
-			if !info.Skipped && !info.Snoozed {
-				if derr := update.StartDownload(info); derr != nil {
-					applog.Error("自动下载启动失败: %v", derr)
-				} else {
-					applog.Info("已开始后台自动下载 %s", info.Latest)
-				}
+	}()
+}
+
+// checkUpdateOnce 执行一次更新检查并向前端广播结果。
+// 检查失败或命中缓存/静默策略时不打扰用户，只记录日志。
+func (a *App) checkUpdateOnce() {
+	info, err := update.Check(false)
+	if err != nil {
+		applog.Error("检查更新失败: %v", err)
+		return
+	}
+	if info.HasUpdate {
+		applog.Info("发现新版本: %s -> %s", info.Current, info.Latest)
+		if !info.Skipped && !info.Snoozed {
+			if derr := update.StartDownload(info); derr != nil {
+				applog.Error("自动下载启动失败: %v", derr)
+			} else {
+				applog.Info("已开始后台自动下载 %s", info.Latest)
 			}
 		}
-		a.emit("update:info", toUpdateDTO(info))
-	}()
+	}
+	a.emit("update:info", toUpdateDTO(info))
 }
 
 func (a *App) domReady(ctx context.Context) {}

@@ -36,8 +36,9 @@ const (
 	// 拉全量列表后按语义版本号取最大。
 	apiURL = "https://api.github.com/repos/" + repoOwner + "/" + repoName + "/releases"
 
-	// checkInterval 自动检查的最小间隔，避免每次启动都打 API（未鉴权限流 60 次/小时/IP）。
-	checkInterval = 6 * time.Hour
+	// checkInterval 自动检查的最小间隔：启动检查一次后，每 1 小时重查。
+	// （未鉴权限流 60 次/小时/IP，1 小时一次远低于限额。）
+	checkInterval = 1 * time.Hour
 	// defaultSnooze 用户点"稍后提醒"后的静默时长。
 	defaultSnooze = 24 * time.Hour
 
@@ -76,6 +77,10 @@ type State struct {
 
 // CurrentVersion 返回当前程序版本（构建时注入，未注入则为 "dev"）。
 func CurrentVersion() string { return version }
+
+// CheckInterval 返回自动检查更新的间隔（启动检查后每 1 小时一次）。
+// 供 main 层启动定时循环使用，保持间隔配置单一来源。
+func CheckInterval() time.Duration { return checkInterval }
 
 // IsRelease 判断当前程序是否为正式发布版本（dev 版本不提示更新）。
 func IsRelease() bool { return isReleaseVersion(version) }
@@ -220,16 +225,8 @@ func Check(force bool) (*Info, error) {
 
 	// needNet 判定：
 	//  - 手动检查（force）或首次（无缓存）→ 必须联网
-	//  - 超过检查间隔 → 联网
-	//  - 缓存结论是"无更新"（Latest <= Current）→ 间隔缩短到 1 小时重查：
-	//    "无更新"的缓存价值低，且 CI 并行发布可能让 latest 曾指向低版本，
-	//    若按 6 小时等，用户要等很久才能收到正确提示。
-	noUpdateCached := st.LatestVersion != "" && Compare(st.LatestVersion, cur) <= 0
-	interval := checkInterval
-	if noUpdateCached {
-		interval = time.Hour
-	}
-	needNet := force || st.LatestVersion == "" || time.Since(st.LastCheck) > interval
+	//  - 超过检查间隔（1 小时）→ 联网
+	needNet := force || st.LatestVersion == "" || time.Since(st.LastCheck) > checkInterval
 	if !needNet {
 		return info, nil
 	}
